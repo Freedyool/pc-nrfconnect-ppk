@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: LicenseRef-Nordic-4-Clause
  */
 
-import React, { MutableRefObject } from 'react';
+import React, { MutableRefObject, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
     Dialog,
@@ -16,6 +16,7 @@ import { BigNumber, Fraction, unit } from 'mathjs';
 import { isSamplingRunning } from '../../slices/appSlice';
 import {
     getChartYAxisRange,
+    // getWindowDuration,
     setShowSettings,
     showChartSettings,
     toggleYAxisLock,
@@ -39,6 +40,48 @@ const TimeWindowButton = ({ label, zoomToWindow }: TimeWindowButton) => (
         {label}
     </button>
 );
+
+type TimeWindowSubmit = {
+    zoomToWindow: (duration: number | BigNumber | Fraction) => void;
+};
+const TimeWindowSubmit = ({ zoomToWindow }: TimeWindowSubmit) => {
+    // const val = useSelector(getWindowDuration);
+    const [inputValue, setInputValue] = useState('');
+    const [unitLabel, setUnitLabel] = useState('ms');
+
+    return (
+        <form
+            id="time-window-submit-form"
+            className="tw-flex tw-w-2/4 tw-flex-row tw-justify-center tw-gap-x-2 tw-place-self-start lg:tw-place-self-auto"
+            onSubmit={() =>
+                zoomToWindow(
+                    unit(inputValue + unitLabel)
+                        .to('us')
+                        .toNumeric()
+                )
+            }
+        >
+            {/* {val} */}
+            <input
+                type="text"
+                value={inputValue}
+                className="tw-h-5 tw-w-12 tw-min-w-[3rem] tw-border tw-border-solid tw-border-gray-200 tw-bg-white
+                tw-text-xs tw-text-gray-700 hover:tw-bg-gray-50 active:enabled:tw-bg-gray-50 lg:tw-w-16"
+                onChange={e => setInputValue(e.target.value)}
+            />
+            <select
+                value={unitLabel}
+                className="tw-h-5 tw-w-8 tw-min-w-[3rem] tw-border tw-border-solid tw-border-gray-200 tw-bg-white
+                tw-text-xs tw-text-gray-700 hover:tw-bg-gray-50 active:enabled:tw-bg-gray-50 lg:tw-w-12"
+                onChange={e => setUnitLabel(e.target.value)}
+            >
+                <option value="ms">ms</option>
+                <option value="s">s</option>
+                <option value="min">min</option>
+            </select>
+        </form>
+    );
+};
 
 type ChartTop = {
     onLiveModeChange: (live: boolean) => void;
@@ -85,6 +128,7 @@ const ChartTop = ({
                 </button>
             </div>
             <div className="tw-flex tw-w-2/4 tw-flex-row tw-justify-center tw-gap-x-2 tw-place-self-start lg:tw-place-self-auto">
+                <TimeWindowSubmit zoomToWindow={zoomToWindow} />
                 {timeWindowLabels.map(label => (
                     <TimeWindowButton
                         label={label}
