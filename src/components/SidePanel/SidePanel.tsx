@@ -29,7 +29,11 @@ import { isSessionActive } from '../../slices/chartSlice';
 import { resetGainsToDefaults } from '../../slices/gainsSlice';
 import { resetSpikeFilterToDefaults } from '../../slices/spikeFilterSlice';
 import { resetVoltageRegulatorMaxCapPPK2 } from '../../slices/voltageRegulatorSlice';
-import { isDataLoggerPane, isScopePane } from '../../utils/panes';
+import {
+    isDataLoggerPane,
+    isScopePane,
+    isSimulatorPane,
+} from '../../utils/panes';
 import { CapVoltageSettings } from './CapVoltageSettings';
 import DisplayOptions from './DisplayOptions';
 import Gains from './Gains';
@@ -37,6 +41,7 @@ import Instructions from './Instructions';
 import { Load, Save } from './LoadSave';
 import PowerMode from './PowerMode';
 import SessionSettings from './SessionSettings';
+import SimulateOptions from './SimulateOptions';
 import SpikeFilter from './SpikeFilter';
 import StartStop from './StartStop';
 
@@ -67,6 +72,7 @@ export default () => {
     const sessionActive = useSelector(isSessionActive);
     const showProgressDialog = useSelector(getShowProgressDialog);
     const scopePane = useSelector(isScopePane);
+    const simulatorPane = useSelector(isSimulatorPane);
     const dataLoggerPane = useSelector(isDataLoggerPane);
 
     useConfirmBeforeClose();
@@ -85,9 +91,17 @@ export default () => {
 
     return (
         <SidePanel className="side-panel tw-mt-9">
-            {!deviceConnected && <Load />}
-            {!fileLoaded && !deviceConnected && !sessionActive && (
-                <Instructions />
+            {!simulatorPane && !deviceConnected && <Load />}
+            {!simulatorPane &&
+                !fileLoaded &&
+                !deviceConnected &&
+                !sessionActive && <Instructions />}
+            {simulatorPane && (
+                <>
+                    <StartStop />
+                    <Save />
+                    <SimulateOptions />
+                </>
             )}
             {!fileLoaded && deviceOpen && (scopePane || dataLoggerPane) && (
                 <>
@@ -102,7 +116,9 @@ export default () => {
                         <DisplayOptions />
                     </>
                 )}
-            {(dataLoggerPane || !deviceConnected) && <SessionSettings />}
+            {(simulatorPane || dataLoggerPane || !deviceConnected) && (
+                <SessionSettings />
+            )}
             {!fileLoaded && deviceOpen && (dataLoggerPane || scopePane) && (
                 <Group collapsible heading="Advanced Configuration" gap={8}>
                     <div className="tw-border tw-border-solid tw-border-gray-400 tw-p-2 tw-text-[10px] tw-text-gray-400">

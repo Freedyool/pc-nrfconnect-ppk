@@ -14,6 +14,7 @@ import app from './appSlice';
 import chart from './chartSlice';
 import dataLogger from './dataLoggerSlice';
 import gains from './gainsSlice';
+import simulator from './simulatorSlice';
 import spikeFilter from './spikeFilterSlice';
 import trigger from './triggerSlice';
 import voltageRegulator from './voltageRegulatorSlice';
@@ -33,6 +34,7 @@ const appReducer = combineReducers({
     deprecatedDevices,
     progressDialog,
     trigger,
+    simulator,
 });
 
 export default appReducer;

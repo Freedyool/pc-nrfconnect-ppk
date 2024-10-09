@@ -41,7 +41,11 @@ import {
     getFreeSpace,
     remainingTime as calcRemainingTime,
 } from '../../utils/fileUtils';
-import { isDataLoggerPane, isScopePane } from '../../utils/panes';
+import {
+    isDataLoggerPane,
+    isScopePane,
+    isSimulatorPane,
+} from '../../utils/panes';
 import {
     getDoNotAskStartAndClear,
     setDoNotAskStartAndClear,
@@ -61,6 +65,7 @@ export default () => {
 
     const onWriteListener = useRef<() => void>();
     const scopePane = useSelector(isScopePane);
+    const simulatorPane = useSelector(isSimulatorPane);
     const dataLoggerPane = useSelector(isDataLoggerPane);
     const recordingMode = useSelector(getRecordingMode);
     const { samplingRunning } = useSelector(appState);
@@ -86,14 +91,17 @@ export default () => {
         dispatch(resetTriggerOrigin());
         dispatch(resetCursor());
 
-        const mode: RecordingMode = scopePane ? 'Scope' : 'DataLogger';
+        const mode: RecordingMode =
+            (scopePane && 'Scope') ||
+            (simulatorPane && 'Simulator') ||
+            'DataLogger';
 
         telemetry.sendEvent('StartSampling', {
             mode,
             samplesPerSecond: DataManager().getSamplesPerSecond(),
         });
 
-        if (mode === 'DataLogger') {
+        if (mode === 'DataLogger' || mode === 'Simulator') {
             if (!fs.existsSync(sessionFolder)) {
                 logger.error(
                     `Temp Disk root folder '${sessionFolder}' does not exists. Change the root directory in the Temp Disk settings on the side panel.`
@@ -119,7 +127,7 @@ export default () => {
         }
 
         setShowDialog(false);
-        await dispatch(samplingStart());
+        await dispatch(samplingStart(mode));
         onWriteListener.current?.();
         onWriteListener.current = DataManager().onFileWrite(() => {
             getFreeSpace(diskFullTrigger, sessionFolder).then(s => {

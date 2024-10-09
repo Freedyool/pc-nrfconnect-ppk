@@ -42,6 +42,7 @@ const getTimestampMock = jest.fn(() => 100);
 jest.mock('../../utils/panes', () => ({
     isDataLoggerPane: jest.fn(() => true),
     isScopePane: jest.fn(() => false),
+    isSimulatorPane: jest.fn(() => false),
 }));
 
 jest.mock('../../globals', () => {

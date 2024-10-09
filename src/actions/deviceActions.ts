@@ -125,11 +125,8 @@ export const setupOptions =
 // Only used by Data Logger Pane
 /* Start reading current measurements */
 export const samplingStart =
-    (): AppThunk<RootState, Promise<void>> => async (dispatch, getState) => {
-        const mode: RecordingMode = isDataLoggerPane(getState())
-            ? 'DataLogger'
-            : 'Scope';
-
+    (mode: RecordingMode): AppThunk<RootState, Promise<void>> =>
+    async (dispatch, getState) => {
         dispatch(setRecordingMode(mode));
         dispatch(setTriggerActive(false));
         dispatch(resetTriggerOrigin());
@@ -148,6 +145,8 @@ export const samplingStart =
             case 'Scope':
                 DataManager().setSamplesPerSecond(100_000);
                 break;
+            case 'Simulator':
+                break;
         }
         await device!.ppkAverageStart();
         startPreventSleep();
@@ -156,10 +155,9 @@ export const samplingStart =
 export const samplingStop =
     (): AppThunk<RootState, Promise<void>> => async dispatch => {
         latestTrigger = undefined;
-        if (!device) return;
         dispatch(clearRecordingMode());
         dispatch(samplingStoppedAction());
-        await device.ppkAverageStop();
+        await device?.ppkAverageStop();
         stopPreventSleep();
         releaseFileWriteListener?.();
     };
