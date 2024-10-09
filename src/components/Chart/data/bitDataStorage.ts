@@ -7,14 +7,14 @@
 import { numberOfDigitalChannels } from '../../../globals';
 import { lineDataForBitState } from '../../../utils/bitConversion';
 import type {
-    BitStateType,
+    BitStateIndexType,
     DigitalChannelStates,
     TimestampType,
 } from './dataTypes';
 
 export interface BitDataStorage {
     lineData: DigitalChannelStates[];
-    previousBitStates: Array<BitStateType | null>;
+    previousBitStates: Array<BitStateIndexType | null>;
     digitalChannelsToCompute: number[] | undefined;
     latestTimestamp: TimestampType;
 
@@ -22,12 +22,12 @@ export interface BitDataStorage {
     storeEntry: (
         timestamp: TimestampType,
         bitNumber: number,
-        bitState: BitStateType
+        bitState: BitStateIndexType
     ) => void;
     storeBit: (
         timestamp: TimestampType,
         bitNumber: number,
-        bitState: BitStateType
+        bitState: BitStateIndexType
     ) => void;
     addFinalEntries: () => void;
     getLineData: () => DigitalChannelStates[];
@@ -64,13 +64,23 @@ export default (): BitDataStorage => ({
 
     storeBit(timestamp, bitNumber, bitState) {
         this.latestTimestamp = timestamp;
+        if (timestamp === undefined) return;
 
-        const bitChanged = this.previousBitStates[bitNumber] !== bitState;
-        if (bitChanged) {
-            this.storeEntry(timestamp, bitNumber, bitState);
-
-            this.previousBitStates[bitNumber] = bitState;
+        if (bitState === 3) {
+            if (this.previousBitStates[bitNumber] === 1) {
+                this.storeEntry(timestamp, bitNumber, 1);
+                this.storeEntry(timestamp + 1, bitNumber, 2);
+            } else {
+                this.storeEntry(timestamp, bitNumber, 2);
+                this.storeEntry(timestamp + 1, bitNumber, 1);
+            }
+        } else {
+            const bitChanged = this.previousBitStates[bitNumber] !== bitState;
+            if (bitChanged) {
+                this.storeEntry(timestamp, bitNumber, bitState);
+            }
         }
+        this.previousBitStates[bitNumber] = bitState;
     },
 
     addFinalEntries() {
