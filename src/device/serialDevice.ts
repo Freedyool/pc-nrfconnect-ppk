@@ -88,7 +88,8 @@ class SerialDevice extends Device {
         };
         this.path = device.serialPorts?.at(0)?.comName;
         this.child = fork(
-            path.resolve(getAppDir(), 'worker', 'serialDevice.js')
+            path.resolve(getAppDir(), 'worker', 'virtualDevice.js')
+            // path.resolve(getAppDir(), 'worker', 'serialDevice.js')
         );
         this.parser = null;
         this.resetDataLossCounter();
@@ -99,7 +100,13 @@ class SerialDevice extends Device {
                 return;
             }
 
+            if ('reply' in message && message.reply) {
+                console.log('reply in message:', message);
+                return;
+            }
+
             if ('data' in message && message.data) {
+                // console.log('data in message:', message);
                 this.parser(Buffer.from(message.data));
                 return;
             }
@@ -216,6 +223,7 @@ class SerialDevice extends Device {
             this.consecutiveRangeSample = 0;
             this.afterSpike = 0;
         }
+        // console.log({ write: cmd });
         this.child.send({ write: cmd });
         return Promise.resolve(cmd.length);
     }
