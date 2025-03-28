@@ -85,6 +85,7 @@ render(
         panes={[
             { name: Panes.DATA_LOGGER, Main: ChartWrapper },
             { name: Panes.SCOPE, Main: ChartWrapper },
+            { name: Panes.MULTI_DEVICE, Main: ChartWrapper },
         ]}
     >
         <AppTitleHook />
