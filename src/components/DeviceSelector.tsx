@@ -56,6 +56,7 @@ export default () => {
 
     return (
         <DeviceSelector
+            // deviceSelectedList={['DEVICE1', 'DEVICE2']}
             deviceSetupConfig={deviceSetupConfig}
             deviceListing={deviceListing}
             onDeviceConnected={device =>
@@ -64,33 +65,33 @@ export default () => {
             onDeviceDisconnected={device =>
                 logger.info(`Device Disconnected SN:${device.serialNumber}`)
             }
-            onDeviceSelected={device => {
+            onDeviceSelected={(sel, device) => {
                 if (device.traits.jlink) {
                     dispatch(setShowPPK1Dialog(true));
                 }
                 logger.info(
-                    `Validating firmware for device with s/n ${device.serialNumber}`
+                    `${sel} Validating firmware for device with s/n ${device.serialNumber}`
                 );
             }}
             onDeviceIsReady={device => {
                 logger.info(`Opening device with s/n ${device.serialNumber}`);
                 dispatch(open(device));
             }}
-            onDeviceDeselected={() => {
-                logger.info('Deselecting device');
+            onDeviceDeselected={sel => {
+                logger.info('Deselecting device', sel);
                 dispatch(close());
             }}
-            virtualDevices={['ADV-PPK']}
-            onVirtualDeviceSelected={device => {
-                logger.info(`${device} selected`);
+            virtualDevices={['ADV-PPK1', 'ADV-PPK2']}
+            onVirtualDeviceSelected={(sel, device) => {
+                logger.info(`${sel} ${device} selected`);
                 const virtualDevice: Device = {
                     id: 0,
                     traits: {},
                 };
                 dispatch(open(virtualDevice));
             }}
-            onVirtualDeviceDeselected={() => {
-                logger.info('Deselecting device');
+            onVirtualDeviceDeselected={sel => {
+                logger.info('Deselecting virtual device', sel);
                 dispatch(close());
             }}
         />

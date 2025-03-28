@@ -1,0 +1,818 @@
+diff --git a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/DeviceSelector.tsx b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/DeviceSelector.tsx
+index 21c22c1..a3e187a 100644
+--- a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/DeviceSelector.tsx
++++ b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/DeviceSelector.tsx
+@@ -15,7 +15,6 @@ import telemetry from '../../telemetry/telemetry';
+ import useHotKey from '../../utils/useHotKey';
+ import {
+     clearWaitForDevice,
+-    getWaitingToAutoReselect,
+     setAutoSelectDevice,
+ } from '../deviceAutoSelectSlice';
+ import {
+@@ -29,13 +28,15 @@ import {
+     deselectDevice,
+     deselectVirtualDevice,
+     Device,
+-    deviceIsSelected as deviceIsSelectedSelector,
++    DeviceSelector,
++    getDeviceSelectors,
+     isDeviceWithSerialNumber,
+     selectDevice,
+-    selectedDevice,
+-    selectedVirtualDevice,
+     selectVirtualDevice,
+     setSelectedDeviceInfo,
++    addDeviceSelector,
++    toggleDeviceSelector,
++    getDeviceSelector,
+ } from '../deviceSlice';
+ import DeviceList from './DeviceList/DeviceList';
+ import SelectDevice from './SelectDevice';
+@@ -43,25 +44,28 @@ import SelectedDevice from './SelectedDevice';
+ import SelectedVirtualDevice from './SelectedVirtualDevice';
+ 
+ export interface Props {
++    deviceSelectedList?: string[];
+     deviceListing: DeviceTraits;
+     deviceSetupConfig?: DeviceSetupConfig;
+     onDeviceSelected?: (
++        selector: number,
+         device: Device,
+         autoReselected: boolean,
+         abortController: AbortController
+     ) => void;
+-    onDeviceDeselected?: () => void;
++    onDeviceDeselected?: (selector: number) => void;
+     onDeviceConnected?: (device: Device) => void;
+     onDeviceDisconnected?: (device: Device) => void;
+     onDeviceIsReady?: (device: Device) => void;
+     deviceFilter?: (device: Device) => boolean;
+     virtualDevices?: string[];
+-    onVirtualDeviceSelected?: (device: string) => void;
+-    onVirtualDeviceDeselected?: () => void;
++    onVirtualDeviceSelected?: (selector: number, device: string) => void;
++    onVirtualDeviceDeselected?: (selector: number) => void;
+ }
+ 
+ const noop = () => {};
+ export default ({
++    deviceSelectedList = ["SELECT DEVICE"],
+     deviceListing,
+     deviceSetupConfig,
+     onDeviceSelected = noop,
+@@ -75,18 +79,16 @@ export default ({
+     onVirtualDeviceDeselected = noop,
+ }: Props) => {
+     const dispatch = useDispatch();
+-    const [deviceListVisible, setDeviceListVisible] = useState(false);
++    const deviceSelectors = useSelector(getDeviceSelectors);
+ 
+-    const deviceIsSelected = useSelector(deviceIsSelectedSelector);
+-    const currentDevice = useSelector(selectedDevice);
+-    const waitingToAutoReconnect = useSelector(getWaitingToAutoReselect);
+-    const showSelectedDevice = deviceIsSelected || waitingToAutoReconnect;
+-    const virtualDeviceSelected = useSelector(selectedVirtualDevice);
++    const currentSelector = useSelector(getDeviceSelector);
++    const currentDevice = currentSelector?.selectedDevice;
++    const currentVirtualDevice = currentSelector?.selectedVirtualDevice;
+ 
+     const abortController = useRef<AbortController>();
+ 
+     const doDeselectDevice = useCallback(
+-        (device?: Device) => {
++        (selector?: number, device?: Device) => {
+             abortController.current?.abort();
+             if (device) {
+                 telemetry.sendEvent(
+@@ -98,8 +100,10 @@ export default ({
+             dispatch(clearWaitForDevice());
+             dispatch(setAutoSelectDevice(undefined));
+             logger.info(`Deselected device`);
+-            onDeviceDeselected();
+-            dispatch(deselectDevice());
++            onDeviceDeselected(selector ?? -3);
++            if (device) {
++                dispatch(deselectDevice(device));
++            }
+         },
+         [dispatch, onDeviceDeselected]
+     );
+@@ -108,7 +112,7 @@ export default ({
+     // not updated frequently as this
+     // will have a side effect to stop and start the hotplug events
+     const doSelectDevice = useCallback(
+-        async (device: Device, autoReselected: boolean) => {
++        async (selector: number, device: Device, autoReselected: boolean) => {
+             logger.info(
+                 `Selecting device with the serial number ${device.serialNumber}`
+             );
+@@ -117,7 +121,6 @@ export default ({
+             abortController.current = controller;
+ 
+             dispatch(clearWaitForDevice());
+-            setDeviceListVisible(false);
+             dispatch(selectDevice(device));
+             dispatch(setAutoSelectDevice(device));
+ 
+@@ -143,7 +146,7 @@ export default ({
+                 logger.info(
+                     `Selected device with the serial number ${device.serialNumber}`
+                 );
+-                onDeviceSelected(device, autoReselected, controller);
++                onDeviceSelected(selector, device, autoReselected, controller);
+ 
+                 telemetry.sendEvent('device selected', {
+                     device: simplifyDevice(device),
+@@ -157,7 +160,7 @@ export default ({
+                                 device,
+                                 deviceSetupConfig,
+                                 onDeviceIsReady,
+-                                doDeselectDevice,
++                                (d) => doDeselectDevice(selector, d),
+                                 deviceInfo
+                             )
+                         );
+@@ -185,8 +188,8 @@ export default ({
+                 deviceListing,
+                 onDeviceConnected,
+                 onDeviceDisconnected,
+-                onDeviceDeselected,
+-                doSelectDevice
++                () => onDeviceDeselected(-1),
++                (d, a) => doSelectDevice(-1, d, a),
+             )
+         );
+     }, [
+@@ -198,9 +201,6 @@ export default ({
+         doSelectDevice,
+     ]);
+ 
+-    const toggleDeviceListVisible = () =>
+-        setDeviceListVisible(!deviceListVisible);
+-
+     useEffect(() => {
+         doStartWatchingDevices();
+         return stopWatchingDevices;
+@@ -210,74 +210,116 @@ export default ({
+         hotKey: 'alt+s',
+         title: 'Select device',
+         isGlobal: true,
+-        action: () => toggleDeviceListVisible(),
++        action: () => dispatch(toggleDeviceSelector(currentSelector?.id ?? 0)),
++    });
++
++    const toggleDeviceListVisible = (selector: number) => {
++        let count = 0;
++        deviceSelectors.forEach((sel, index) => {
++            if (sel.isListVisible && index !== selector) {
++                dispatch(toggleDeviceSelector(index));
++                count++;
++            }
++        });
++        if (count === 0) {
++            dispatch(toggleDeviceSelector(selector));
++        } else {
++            setTimeout(() => {
++                dispatch(toggleDeviceSelector(selector));
++            }, 300);
++        }
++    }
++    
++    const devices = deviceSelectedList.map((title, index) => {
++        const deviceSeletor:DeviceSelector = {
++            id: index,
++            isListVisible: false,
++        };
++        dispatch(addDeviceSelector(deviceSeletor));
++
++        return <div className="select-item" key={index}>
++            <SelectDevice
++                selectorId={index}
++                deviceTitle={title}
++                toggleDeviceListVisible={() => toggleDeviceListVisible(index)}
++            />
++            <SelectedDevice
++                selectorId={index}
++                doDeselectDevice={(d) => doDeselectDevice(index, d)}
++                toggleDeviceListVisible={() => toggleDeviceListVisible(index)}
++            />
++            <SelectedVirtualDevice
++                selectorId={index}
++                doDeselectDevice={() => {
++                    onVirtualDeviceDeselected(index);
++                    dispatch(deselectVirtualDevice(index));
++                }}
++                toggleDeviceListVisible={() => toggleDeviceListVisible(index)}
++            />
++        </div> 
+     });
+ 
+     return (
+         <div className="core19-device-selector">
+-            {!showSelectedDevice && !virtualDeviceSelected && (
+-                <SelectDevice
+-                    deviceListVisible={deviceListVisible}
+-                    toggleDeviceListVisible={toggleDeviceListVisible}
+-                />
+-            )}
+-            {showSelectedDevice && (
+-                <SelectedDevice
+-                    doDeselectDevice={() => doDeselectDevice(currentDevice)}
+-                    toggleDeviceListVisible={toggleDeviceListVisible}
+-                />
+-            )}
+-            {virtualDeviceSelected && (
+-                <SelectedVirtualDevice
+-                    virtualDevice={virtualDeviceSelected}
+-                    deselectVirtualDevice={() => {
+-                        onVirtualDeviceDeselected();
+-                        dispatch(deselectVirtualDevice());
+-                    }}
+-                    toggleDeviceListVisible={toggleDeviceListVisible}
+-                />
+-            )}
++            <div className="select-container">
++                { devices }
++            </div>
+             <DeviceList
+-                isVisible={deviceListVisible}
++                isVisible={!!currentSelector}
+                 doSelectDevice={(device, autoReselected) => {
+                     if (device.id === currentDevice?.id) {
+-                        setDeviceListVisible(false);
++                        dispatch(toggleDeviceSelector(-1));
+                         return;
+                     }
+ 
+-                    if (deviceIsSelected) {
+-                        doDeselectDevice(currentDevice);
++                    const index = deviceSelectors.findIndex(
++                        item => 
++                            device.id === item.selectedDevice?.id ||
++                            device.serialNumber === item.selectedDevice?.serialNumber
++                    );
++                    if (index !== -1) {
++                        doDeselectDevice(index, device);
+                     }
+ 
+-                    if (virtualDeviceSelected) {
+-                        dispatch(deselectVirtualDevice());
+-                        onVirtualDeviceDeselected();
++                    if (!!currentDevice) {
++                        doDeselectDevice(currentSelector.id, currentDevice);
+                     }
+ 
+-                    doSelectDevice(device, autoReselected);
++                    if (!!currentVirtualDevice) {
++                        dispatch(deselectVirtualDevice(-1));
++                        onVirtualDeviceDeselected(currentSelector.id);
++                    }
++
++                    doSelectDevice(currentSelector?.id ?? -2, device, autoReselected);
+                 }}
+                 virtualDevices={virtualDevices}
+                 doSelectVirtualDevice={device => {
+-                    if (virtualDeviceSelected === device) {
+-                        setDeviceListVisible(false);
++                    if (currentVirtualDevice === device) {
++                        dispatch(toggleDeviceSelector(-1));
+                         return;
+                     }
+ 
+-                    if (deviceIsSelected) {
+-                        doDeselectDevice(currentDevice);
++                    const index = deviceSelectors.findIndex(
++                        item => device === item.selectedVirtualDevice
++                    );
++                    if (index !== -1) {
++                        dispatch(deselectVirtualDevice(index));
++                    }
++
++                    if (!!currentDevice) {
++                        doDeselectDevice(currentSelector.id, currentDevice);
+                     }
+ 
+-                    if (virtualDeviceSelected) {
+-                        dispatch(deselectVirtualDevice());
+-                        onVirtualDeviceSelected(device);
++                    if (!!currentVirtualDevice) {
++                        dispatch(deselectVirtualDevice(-1));
++                        onVirtualDeviceDeselected(currentSelector.id);
+                     }
+ 
+                     dispatch(clearWaitForDevice());
+-                    setDeviceListVisible(false);
+                     abortController.current?.abort();
+ 
+                     dispatch(selectVirtualDevice(device));
+-                    onVirtualDeviceSelected(device);
++                    onVirtualDeviceSelected(currentSelector?.id ?? -2, device);
+                 }}
+                 deviceFilter={deviceFilter}
+             />
+diff --git a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/SelectDevice.tsx b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/SelectDevice.tsx
+index 07ecaae..df5072d 100644
+--- a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/SelectDevice.tsx
++++ b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/SelectDevice.tsx
+@@ -11,26 +11,44 @@ import classNames from '../../utils/classNames';
+ import chevron from './arrow-down.svg';
+ 
+ import './select-device.scss';
++import { useDispatch, useSelector } from 'react-redux';
++import { getDeviceSelectors } from '../deviceSlice';
+ 
+ interface Props {
+-    deviceListVisible: boolean;
++    selectorId: number;
++    deviceTitle?: string;
+     toggleDeviceListVisible: () => void;
+ }
+ 
+-export default ({ deviceListVisible, toggleDeviceListVisible }: Props) => (
+-    <PseudoButton
+-        title="alt+s"
+-        className={classNames(
+-            'select-device',
+-            deviceListVisible && 'device-list-visible'
+-        )}
+-        onClick={toggleDeviceListVisible}
+-    >
+-        <div>Select device</div>
+-        <img
+-            className={classNames(deviceListVisible && 'img-rotate')}
+-            src={chevron}
+-            alt=""
+-        />
+-    </PseudoButton>
+-);
++export default ({ selectorId, deviceTitle = "Select device", toggleDeviceListVisible }: Props) => {
++    const dispatch = useDispatch();
++    const deviceSelectors = useSelector(getDeviceSelectors);
++    const selector = deviceSelectors[selectorId];
++
++    const isVisible = !selector.selectedDevice && !selector.selectedVirtualDevice;
++    const isListVisible = selector.isListVisible;
++    const isSingleSelector = deviceSelectors.length === 1;
++
++    return (
++        <PseudoButton
++            title="alt+s"
++            className={classNames(
++                'select-device',
++                isListVisible && 'device-list-visible',
++                isVisible || 'hidden',
++                isSingleSelector && 'single',
++            )}
++            onClick={toggleDeviceListVisible}
++            >
++            <div>{deviceTitle}</div>
++            <img
++                className={classNames(
++                    isListVisible && 'img-rotate',
++                    isSingleSelector && 'single',
++                )}
++                src={chevron}
++                alt=""
++            />
++        </PseudoButton>
++    )
++};
+diff --git a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/SelectedDevice.tsx b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/SelectedDevice.tsx
+index 03ebccf..c7213a6 100644
+--- a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/SelectedDevice.tsx
++++ b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/SelectedDevice.tsx
+@@ -5,7 +5,7 @@
+  */
+ 
+ import React from 'react';
+-import { useSelector } from 'react-redux';
++import { useDispatch, useSelector } from 'react-redux';
+ 
+ import PseudoButton from '../../PseudoButton/PseudoButton';
+ import {
+@@ -13,41 +13,66 @@ import {
+     getWaitingForDeviceTimeout,
+     getWaitingToAutoReselect,
+ } from '../deviceAutoSelectSlice';
+-import { selectedDevice } from '../deviceSlice';
+-import BasicDeviceInfo from './BasicDeviceInfo';
++import { Device, getDeviceSelectors } from '../deviceSlice';
+ import DisconnectDevice from './DisconnectDevice';
+ 
+ import './selected-device.scss';
++import InlineInput from '../../InlineInput/InlineInput';
++import { displayedDeviceName } from '../deviceInfo/deviceInfo';
++import BasicDeviceInfo from './BasicDeviceInfo';
+ 
+ export default ({
++    selectorId,
+     doDeselectDevice,
+     toggleDeviceListVisible,
+ }: {
+-    doDeselectDevice: () => void;
++    selectorId: number;
++    doDeselectDevice: (device: Device) => void;
+     toggleDeviceListVisible: () => void;
+ }) => {
+     const waitingForAutoReselect = useSelector(getWaitingToAutoReselect);
+     const waitingForDevice = useSelector(getWaitingForDeviceTimeout);
+-    const selDevice = useSelector(selectedDevice);
+     const autoReconnectDevice = useSelector(getAutoReselectDevice);
+-    const device = selDevice ?? autoReconnectDevice;
++    
++    const dispatch = useDispatch();
++    const deviceSelectors = useSelector(getDeviceSelectors);
++    const selector = deviceSelectors[selectorId];
++    
++    const device = selector.selectedDevice ?? autoReconnectDevice;
++    const isVisible = !!selector.selectedDevice || waitingForAutoReselect;
++    const isSingleSelector = deviceSelectors.length === 1;
+ 
+     return (
+         <PseudoButton
+             className={`selected-device ${
+                 waitingForAutoReselect || waitingForDevice ? 'reconnecting' : ''
+-            }`}
++            } ${ isVisible || 'hidden' }`}
+             onClick={toggleDeviceListVisible}
+         >
+-            {device && (
++            {device && (isSingleSelector ? (
+                 <BasicDeviceInfo
+                     device={device}
+                     toggles={
+-                        <DisconnectDevice doDeselectDevice={doDeselectDevice} />
++                        <DisconnectDevice doDeselectDevice={() => doDeselectDevice(device)} />
+                     }
+                     showWaitingStatus
+                 />
+-            )}
++            ) : (
++                <div className="basic-device-info tw-h-[42px] tw-ml-1.5">
++                    <div className="details tw-flex tw-flex-col">
++                        <InlineInput
++                            className="name"
++                            value={displayedDeviceName(device)}
++                            isValid={name => name !== ''}
++                            onChange={()=>{}}
++                        />
++                        <div className="serial-number">{device.serialNumber}</div>
++                    </div>
++                    <div className="tw-mr-1.5 tw-flex tw-h-full tw-w-8 tw-flex-col tw-items-center tw-justify-center">
++                        <DisconnectDevice doDeselectDevice={() => doDeselectDevice(device)} />
++                    </div>
++                </div>
++            ))}
+         </PseudoButton>
+     );
+ };
+diff --git a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/SelectedVirtualDevice.tsx b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/SelectedVirtualDevice.tsx
+index ed42334..873bfef 100644
+--- a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/SelectedVirtualDevice.tsx
++++ b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/SelectedVirtualDevice.tsx
+@@ -10,31 +10,47 @@ import PseudoButton from '../../PseudoButton/PseudoButton';
+ import DisconnectDevice from './DisconnectDevice';
+ 
+ import './selected-device.scss';
++import { useDispatch, useSelector } from 'react-redux';
++import { deselectVirtualDevice, getDeviceSelectors } from '../deviceSlice';
+ 
+ export default ({
+-    virtualDevice,
+-    deselectVirtualDevice,
++    selectorId,
++    doDeselectDevice,
+     toggleDeviceListVisible,
+ }: {
+-    virtualDevice: string;
+-    deselectVirtualDevice: () => void;
++    selectorId: number;
++    doDeselectDevice: () => void;
+     toggleDeviceListVisible: () => void;
+-}) => (
+-    <PseudoButton
+-        className="tw-flex tw-h-10 tw-flex-row tw-items-center tw-bg-gray-700 tw-text-gray-50 hover:tw-bg-gray-600"
+-        onClick={toggleDeviceListVisible}
+-    >
+-        <span className="icon mdi mdi-flask-empty tw-text-2xl" />
+-        <div className="details tw-flex tw-flex-grow-[2] tw-flex-col">
+-            <p className="tw-m-0 tw-h-[17px] tw-text-sm/[14px] tw-font-bold">
+-                {virtualDevice}
+-            </p>
+-            <p className="tw-m-0 tw-text-[11px]/3 tw-uppercase group-hover:tw-text-gray-600">
+-                Virtual Device
+-            </p>
+-        </div>
+-        <div className="tw-mr-2.5 tw-flex tw-h-full tw-items-center tw-justify-center">
+-            <DisconnectDevice doDeselectDevice={deselectVirtualDevice} />
+-        </div>
+-    </PseudoButton>
+-);
++}) => {
++    const dispatch = useDispatch();
++    const deviceSelectors = useSelector(getDeviceSelectors);
++    const selector = deviceSelectors[selectorId];
++    const isVisible = !!selector.selectedVirtualDevice;
++    const isSingleSelector = deviceSelectors.length === 1;
++
++    return (
++        <PseudoButton
++            className={`${
++                isVisible ? 'tw-flex' : 'hidden'
++            } tw-h-10 tw-flex-row tw-items-center tw-bg-gray-700 tw-text-gray-50 hover:tw-bg-gray-600 `}
++            onClick={toggleDeviceListVisible}
++        >
++            { isSingleSelector && <span className="icon mdi mdi-flask-empty tw-text-2xl" /> }
++            <div className="details tw-flex tw-flex-grow-[2] tw-flex-col">
++                <p className={`${
++                    isSingleSelector || 'tw-ml-2.5'
++                } tw-m-0  tw-h-[17px] tw-text-sm/[14px] tw-font-bold`}>
++                    {selector.selectedVirtualDevice}
++                </p>
++                { isSingleSelector &&
++                    <p className="tw-m-0 tw-text-[11px]/3 tw-uppercase group-hover:tw-text-gray-600">
++                        Virtual Device
++                    </p>
++                }
++            </div>
++            <div className="tw-mr-2.5 tw-flex tw-h-full tw-items-center tw-justify-center">
++                <DisconnectDevice doDeselectDevice={doDeselectDevice} />
++            </div>
++        </PseudoButton>
++    );
++}
+\ No newline at end of file
+diff --git a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/select-device.scss b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/select-device.scss
+index 24c3257..72e0dd1 100644
+--- a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/select-device.scss
++++ b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/select-device.scss
+@@ -7,11 +7,25 @@
+ @import "../../variables";
+ 
+ .core19-device-selector {
++    .select-container {
++        display: flex;
++        flex-direction: row;
++        align-items: center;
++    }
++
++    .select-item {
++        flex: 1;
++    }
++
+     .select-device {
+         font-size: 16px;
+         background: $primary;
+ 
+-        padding-left: 68px;
++        padding-left: 6px;
++        &.single {
++            padding-left: 25% !important;
++        }
++        
+         text-transform: uppercase;
+ 
+         color: $white;
+@@ -28,7 +42,10 @@
+         }
+ 
+         img {
+-            margin-right: 10px !important;
++            margin-right: 6px;
++            &.single {
++                margin-right: 10px !important;
++            }
+             transition: transform 100ms linear;
+             &.img-rotate {
+                 transform: rotate(180deg);
+@@ -36,3 +53,4 @@
+         }
+     }
+ }
++
+diff --git a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/deviceSlice.ts b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/deviceSlice.ts
+index 03ef7eb..e9b95f7 100644
+--- a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/deviceSlice.ts
++++ b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/deviceSlice.ts
+@@ -27,6 +27,14 @@ export interface DeviceWithSerialNumber extends Device {
+     serialNumber: string;
+ }
+ 
++export interface DeviceSelector {
++    id: number;
++    isListVisible: boolean;
++    selectedDevice?: Device;
++    selectedDeviceInfo?: DeviceInfo;
++    selectedVirtualDevice?: string;
++}
++
+ export const isDeviceWithSerialNumber = (
+     device: Device
+ ): device is DeviceWithSerialNumber =>
+@@ -56,8 +64,28 @@ const updateDevice = (
+     }
+ };
+ 
++const findCurrentSelector = (
++    selectors: DeviceSelector[],
++) => {
++    const index = selectors.findIndex(ds => ds.isListVisible === true);
++
++    return { index, selector: selectors[index] };
++}
++
++const updateDeviceSelector = (
++    state: DeviceState,
++    updateToMergeIn: Partial<DeviceSelector>,
++    id?: number,
++) => {
++    const deviceSelector = id !== undefined ? state.deviceSelectors[id] : state.deviceSelectors.find(sel => sel.isListVisible === true);
++    if (deviceSelector) {
++        Object.assign(deviceSelector, updateToMergeIn);
++    }
++};
++
+ export interface DeviceState {
+     devices: Device[];
++    deviceSelectors: DeviceSelector[],
+     selectedDevice?: Device;
+     selectedDeviceInfo?: DeviceInfo;
+     selectedVirtualDevice?: string;
+@@ -65,6 +93,7 @@ export interface DeviceState {
+ 
+ const initialState: DeviceState = {
+     devices: [],
++    deviceSelectors: [],
+ };
+ 
+ const slice = createSlice({
+@@ -75,22 +104,25 @@ const slice = createSlice({
+          * Indicates that a device has been selected.
+          */
+         selectDevice: (state, action: PayloadAction<Device>) => {
+-            state.selectedDevice = action.payload;
++            updateDeviceSelector(
++                state,
++                {
++                    selectedDevice: action.payload,
++                    isListVisible: false,
++                },
++            );
+         },
+ 
+         setSelectedDeviceInfo: (
+             state,
+             action: PayloadAction<DeviceInfo | undefined>
+         ) => {
+-            state.selectedDeviceInfo = action.payload;
+-        },
+-
+-        /*
+-         * Indicates that the currently selected device has been deselected.
+-         */
+-        deselectDevice: state => {
+-            state.selectedDevice = undefined;
+-            state.selectedDeviceInfo = undefined;
++            updateDeviceSelector(
++                state,
++                {
++                    selectedDeviceInfo: action.payload,
++                },
++            );
+         },
+ 
+         addDevice: (state, action: PayloadAction<Device>) => {
+@@ -227,12 +259,68 @@ const slice = createSlice({
+         },
+ 
+         selectVirtualDevice: (state, action: PayloadAction<string>) => {
+-            state.selectedVirtualDevice = action.payload;
++            updateDeviceSelector(
++                state,
++                {
++                    selectedVirtualDevice: action.payload,
++                    isListVisible: false,
++                },
++            );
++        },
++
++        /*
++         * Indicates that the currently selected device has been deselected.
++         */
++        deselectDevice: (state, action: PayloadAction<Device>) => {
++            const index = state.deviceSelectors.findIndex(
++                item => item.selectedDevice?.id === action.payload.id
++            );
++            if (index !== -1) {
++                updateDeviceSelector(
++                    state,
++                    {
++                        selectedDevice: undefined,
++                        selectedVirtualDevice: undefined,
++                    },
++                    index,
++                )
++            }
++        },
++
++        deselectVirtualDevice: (state, action: PayloadAction<number>) => {
++            if (action.payload >= state.deviceSelectors.length) return;
++            updateDeviceSelector(
++                state,
++                {
++                    selectedVirtualDevice: undefined,
++                },
++                action.payload === -1 ? undefined : action.payload,
++            )
+         },
+ 
+-        deselectVirtualDevice: state => {
+-            state.selectedVirtualDevice = undefined;
++        addDeviceSelector: (state, action: PayloadAction<DeviceSelector>) => {
++            const index = state.deviceSelectors.findIndex(
++                item => item.id === action.payload.id
++            );
++            if (index === -1) {
++                state.deviceSelectors?.push(action.payload);
++            }
+         },
++
++        toggleDeviceSelector: (state, action: PayloadAction<number>) => {
++            if (action.payload >= state.deviceSelectors.length) return;
++            if (action.payload === -1) {
++                updateDeviceSelector(state, { isListVisible: false });
++            } else {
++                updateDeviceSelector(
++                    state,
++                    {
++                        isListVisible: !state.deviceSelectors[action.payload].isListVisible,
++                    },
++                    action.payload,
++                )
++            }
++        }
+     },
+ });
+ 
+@@ -250,6 +338,8 @@ export const {
+         persistSerialPortOptions,
+         selectVirtualDevice,
+         deselectVirtualDevice,
++        addDeviceSelector,
++        toggleDeviceSelector,
+     },
+ } = slice;
+ 
+@@ -274,3 +364,8 @@ export const getReadbackProtection = (state: RootState) =>
+ 
+ export const selectedVirtualDevice = (state: RootState) =>
+     state.device.selectedVirtualDevice;
++
++export const getDeviceSelector = (state: RootState) =>
++    state.device.deviceSelectors.find(ds => ds.isListVisible === true);
++
++export const getDeviceSelectors = (state: RootState) => state.device.deviceSelectors;
+diff --git a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/PseudoButton/pseudo-button.scss b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/PseudoButton/pseudo-button.scss
+index f485485..dd1bd59 100644
+--- a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/PseudoButton/pseudo-button.scss
++++ b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/PseudoButton/pseudo-button.scss
+@@ -8,4 +8,8 @@
+ 
+ .core19-pseudo-button {
+     cursor: pointer;
++
++    &.hidden {
++        display: none !important;
++    }
+ }
+diff --git a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/typings/generated/src/Device/DeviceSelector/DeviceSelector.d.ts b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/typings/generated/src/Device/DeviceSelector/DeviceSelector.d.ts
+index 31c5508..b5cbed2 100644
+--- a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/typings/generated/src/Device/DeviceSelector/DeviceSelector.d.ts
++++ b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/typings/generated/src/Device/DeviceSelector/DeviceSelector.d.ts
+@@ -3,18 +3,19 @@ import { DeviceTraits } from '../../../nrfutil/device/common';
+ import { DeviceSetupConfig } from '../deviceSetup';
+ import { Device } from '../deviceSlice';
+ export interface Props {
++    deviceSelectedList?: string[];
+     deviceListing: DeviceTraits;
+     deviceSetupConfig?: DeviceSetupConfig;
+-    onDeviceSelected?: (device: Device, autoReselected: boolean, abortController: AbortController) => void;
+-    onDeviceDeselected?: () => void;
++    onDeviceSelected?: (selector: number, device: Device, autoReselected: boolean, abortController: AbortController) => void;
++    onDeviceDeselected?: (selector: number) => void;
+     onDeviceConnected?: (device: Device) => void;
+     onDeviceDisconnected?: (device: Device) => void;
+     onDeviceIsReady?: (device: Device) => void;
+     deviceFilter?: (device: Device) => boolean;
+     virtualDevices?: string[];
+-    onVirtualDeviceSelected?: (device: string) => void;
+-    onVirtualDeviceDeselected?: () => void;
++    onVirtualDeviceSelected?: (selector: number, device: string) => void;
++    onVirtualDeviceDeselected?: (selector: number) => void;
+ }
+-declare const _default: ({ deviceListing, deviceSetupConfig, onDeviceSelected, onDeviceDeselected, onDeviceConnected, onDeviceDisconnected, onDeviceIsReady, deviceFilter, virtualDevices, onVirtualDeviceSelected, onVirtualDeviceDeselected, }: Props) => JSX.Element;
++declare const _default: ({ deviceSelectedList, deviceListing, deviceSetupConfig, onDeviceSelected, onDeviceDeselected, onDeviceConnected, onDeviceDisconnected, onDeviceIsReady, deviceFilter, virtualDevices, onVirtualDeviceSelected, onVirtualDeviceDeselected, }: Props) => JSX.Element;
+ export default _default;
+ //# sourceMappingURL=DeviceSelector.d.ts.map
+\ No newline at end of file
