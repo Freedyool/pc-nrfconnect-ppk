@@ -87,10 +87,9 @@ class SerialDevice extends Device {
             samples: 3,
         };
         this.path = device.serialPorts?.at(0)?.comName;
-        this.child = fork(
-            path.resolve(getAppDir(), 'worker', 'virtualDevice.js')
-            // path.resolve(getAppDir(), 'worker', 'serialDevice.js')
-        );
+        this.child = !device.serialPorts
+            ? fork(path.resolve(getAppDir(), 'worker', 'virtualDevice.js'))
+            : fork(path.resolve(getAppDir(), 'worker', 'serialDevice.js'));
         this.parser = null;
         this.resetDataLossCounter();
 

@@ -468,7 +468,7 @@ index 03ebccf..c7213a6 100644
      );
  };
 diff --git a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/SelectedVirtualDevice.tsx b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/SelectedVirtualDevice.tsx
-index ed42334..873bfef 100644
+index ed42334..86eb78c 100644
 --- a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/SelectedVirtualDevice.tsx
 +++ b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/SelectedVirtualDevice.tsx
 @@ -10,31 +10,47 @@ import PseudoButton from '../../PseudoButton/PseudoButton';
@@ -592,7 +592,7 @@ index 24c3257..72e0dd1 100644
  }
 +
 diff --git a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/deviceSlice.ts b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/deviceSlice.ts
-index 03ef7eb..e9b95f7 100644
+index 03ef7eb..a3cfacf 100644
 --- a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/deviceSlice.ts
 +++ b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/deviceSlice.ts
 @@ -27,6 +27,14 @@ export interface DeviceWithSerialNumber extends Device {
@@ -647,11 +647,10 @@ index 03ef7eb..e9b95f7 100644
  };
  
  const slice = createSlice({
-@@ -75,22 +104,25 @@ const slice = createSlice({
+@@ -75,6 +104,13 @@ const slice = createSlice({
           * Indicates that a device has been selected.
           */
          selectDevice: (state, action: PayloadAction<Device>) => {
--            state.selectedDevice = action.payload;
 +            updateDeviceSelector(
 +                state,
 +                {
@@ -659,35 +658,37 @@ index 03ef7eb..e9b95f7 100644
 +                    isListVisible: false,
 +                },
 +            );
+             state.selectedDevice = action.payload;
          },
  
-         setSelectedDeviceInfo: (
+@@ -82,17 +118,15 @@ const slice = createSlice({
              state,
              action: PayloadAction<DeviceInfo | undefined>
          ) => {
--            state.selectedDeviceInfo = action.payload;
--        },
--
--        /*
--         * Indicates that the currently selected device has been deselected.
--         */
--        deselectDevice: state => {
--            state.selectedDevice = undefined;
--            state.selectedDeviceInfo = undefined;
 +            updateDeviceSelector(
 +                state,
 +                {
 +                    selectedDeviceInfo: action.payload,
 +                },
 +            );
+             state.selectedDeviceInfo = action.payload;
          },
  
+-        /*
+-         * Indicates that the currently selected device has been deselected.
+-         */
+-        deselectDevice: state => {
+-            state.selectedDevice = undefined;
+-            state.selectedDeviceInfo = undefined;
+-        },
+-
          addDevice: (state, action: PayloadAction<Device>) => {
-@@ -227,12 +259,68 @@ const slice = createSlice({
+             const index = state.devices.findIndex(
+                 item =>
+@@ -227,12 +261,72 @@ const slice = createSlice({
          },
  
          selectVirtualDevice: (state, action: PayloadAction<string>) => {
--            state.selectedVirtualDevice = action.payload;
 +            updateDeviceSelector(
 +                state,
 +                {
@@ -695,8 +696,10 @@ index 03ef7eb..e9b95f7 100644
 +                    isListVisible: false,
 +                },
 +            );
-+        },
-+
+             state.selectedVirtualDevice = action.payload;
+         },
+ 
+-        deselectVirtualDevice: state => {
 +        /*
 +         * Indicates that the currently selected device has been deselected.
 +         */
@@ -713,7 +716,9 @@ index 03ef7eb..e9b95f7 100644
 +                    },
 +                    index,
 +                )
-+            }
++            };
++            state.selectedDevice = undefined;
++            state.selectedDeviceInfo = undefined;
 +        },
 +
 +        deselectVirtualDevice: (state, action: PayloadAction<number>) => {
@@ -724,11 +729,10 @@ index 03ef7eb..e9b95f7 100644
 +                    selectedVirtualDevice: undefined,
 +                },
 +                action.payload === -1 ? undefined : action.payload,
-+            )
++            );
+             state.selectedVirtualDevice = undefined;
          },
- 
--        deselectVirtualDevice: state => {
--            state.selectedVirtualDevice = undefined;
++
 +        addDeviceSelector: (state, action: PayloadAction<DeviceSelector>) => {
 +            const index = state.deviceSelectors.findIndex(
 +                item => item.id === action.payload.id
@@ -736,7 +740,7 @@ index 03ef7eb..e9b95f7 100644
 +            if (index === -1) {
 +                state.deviceSelectors?.push(action.payload);
 +            }
-         },
++        },
 +
 +        toggleDeviceSelector: (state, action: PayloadAction<number>) => {
 +            if (action.payload >= state.deviceSelectors.length) return;
@@ -755,7 +759,7 @@ index 03ef7eb..e9b95f7 100644
      },
  });
  
-@@ -250,6 +338,8 @@ export const {
+@@ -250,6 +344,8 @@ export const {
          persistSerialPortOptions,
          selectVirtualDevice,
          deselectVirtualDevice,
@@ -764,7 +768,7 @@ index 03ef7eb..e9b95f7 100644
      },
  } = slice;
  
-@@ -274,3 +364,8 @@ export const getReadbackProtection = (state: RootState) =>
+@@ -274,3 +370,8 @@ export const getReadbackProtection = (state: RootState) =>
  
  export const selectedVirtualDevice = (state: RootState) =>
      state.device.selectedVirtualDevice;
