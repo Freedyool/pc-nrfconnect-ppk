@@ -1,5 +1,5 @@
 diff --git a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/DeviceSelector.tsx b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/DeviceSelector.tsx
-index 21c22c1..a3e187a 100644
+index 21c22c1..417b1e7 100644
 --- a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/DeviceSelector.tsx
 +++ b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/DeviceSelector.tsx
 @@ -15,7 +15,6 @@ import telemetry from '../../telemetry/telemetry';
@@ -46,7 +46,8 @@ index 21c22c1..a3e187a 100644
 +    onDeviceDeselected?: (selector: number) => void;
      onDeviceConnected?: (device: Device) => void;
      onDeviceDisconnected?: (device: Device) => void;
-     onDeviceIsReady?: (device: Device) => void;
+-    onDeviceIsReady?: (device: Device) => void;
++    onDeviceIsReady?: (selector:number, device: Device) => void;
      deviceFilter?: (device: Device) => boolean;
      virtualDevices?: string[];
 -    onVirtualDeviceSelected?: (device: string) => void;
@@ -124,15 +125,26 @@ index 21c22c1..a3e187a 100644
  
                  telemetry.sendEvent('device selected', {
                      device: simplifyDevice(device),
-@@ -157,7 +160,7 @@ export default ({
+@@ -156,8 +159,8 @@ export default ({
+                             setupDevice(
                                  device,
                                  deviceSetupConfig,
-                                 onDeviceIsReady,
+-                                onDeviceIsReady,
 -                                doDeselectDevice,
++                                (d) => onDeviceIsReady(selector, d),
 +                                (d) => doDeselectDevice(selector, d),
                                  deviceInfo
                              )
                          );
+@@ -165,7 +168,7 @@ export default ({
+                         logger.warn(
+                             `Selected device has no serial number. Device setup is not supported.`
+                         );
+-                        onDeviceIsReady(device);
++                        onDeviceIsReady(selector, device);
+                     }
+                 }
+             }
 @@ -185,8 +188,8 @@ export default ({
                  deviceListing,
                  onDeviceConnected,
@@ -791,7 +803,7 @@ index f485485..dd1bd59 100644
 +    }
  }
 diff --git a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/typings/generated/src/Device/DeviceSelector/DeviceSelector.d.ts b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/typings/generated/src/Device/DeviceSelector/DeviceSelector.d.ts
-index 31c5508..b5cbed2 100644
+index 31c5508..47916e6 100644
 --- a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/typings/generated/src/Device/DeviceSelector/DeviceSelector.d.ts
 +++ b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/typings/generated/src/Device/DeviceSelector/DeviceSelector.d.ts
 @@ -3,18 +3,19 @@ import { DeviceTraits } from '../../../nrfutil/device/common';
@@ -807,7 +819,8 @@ index 31c5508..b5cbed2 100644
 +    onDeviceDeselected?: (selector: number) => void;
      onDeviceConnected?: (device: Device) => void;
      onDeviceDisconnected?: (device: Device) => void;
-     onDeviceIsReady?: (device: Device) => void;
+-    onDeviceIsReady?: (device: Device) => void;
++    onDeviceIsReady?: (selector: number, device: Device) => void;
      deviceFilter?: (device: Device) => boolean;
      virtualDevices?: string[];
 -    onVirtualDeviceSelected?: (device: string) => void;

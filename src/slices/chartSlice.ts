@@ -20,7 +20,7 @@ import {
 import type { RootState } from '.';
 import { getSampleFrequency } from './dataLoggerSlice';
 
-export type RecordingMode = 'DataLogger' | 'Scope';
+export type RecordingMode = 'DataLogger' | 'Scope' | 'MultiDevice';
 
 export interface ChartState {
     liveMode: boolean;

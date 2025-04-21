@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import {
     DeviceSelector,
     DeviceSetupConfig,
@@ -15,8 +15,15 @@ import {
     sdfuDeviceSetup,
 } from '@nordicsemiconductor/pc-nrfconnect-shared';
 
-import { close, open } from '../actions/deviceActions';
+import { close, myclose, myopen, open } from '../actions/deviceActions';
 import { setShowPPK1Dialog } from '../features/DeprecatedDevice/DeprecatedDeviceSlice';
+import {
+    DeviceItem,
+    getDeviceSelectorList,
+    removeDevice,
+    setSelectedDevice,
+    updateDevice,
+} from '../slices/multiDeviceSlice';
 
 const deviceListing = {
     nordicUsb: true,
@@ -52,10 +59,11 @@ export const deviceSetupConfig: DeviceSetupConfig = {
 
 export default () => {
     const dispatch = useDispatch();
+    const selectorList = useSelector(getDeviceSelectorList);
 
-    return (
+    const multiDeviceSelector = (
         <DeviceSelector
-            deviceSelectedList={['DEVICE1', 'DEVICE2']}
+            deviceSelectedList={selectorList}
             deviceSetupConfig={deviceSetupConfig}
             deviceListing={deviceListing}
             onDeviceConnected={device =>
@@ -71,28 +79,90 @@ export default () => {
                 logger.info(
                     `${sel} Validating firmware for device with s/n ${device.serialNumber}`
                 );
+                const deviceItem: DeviceItem = {
+                    selector: sel,
+                    portName: device.serialNumber,
+                    isSmuMode: false,
+                    deviceRunning: false,
+                    capabilities: {},
+                };
+                dispatch(updateDevice(deviceItem));
+                dispatch(setSelectedDevice(sel));
             }}
-            onDeviceIsReady={device => {
+            onDeviceIsReady={(sel, device) => {
                 logger.info(`Opening device with s/n ${device.serialNumber}`);
-                dispatch(open(device));
+                dispatch(myopen(sel, device));
             }}
             onDeviceDeselected={sel => {
                 logger.info('Deselecting device', sel);
-                dispatch(close());
+                dispatch(removeDevice(sel));
+                dispatch(myclose(sel));
             }}
-            virtualDevices={['ADV-PPK1', 'ADV-PPK2']}
-            onVirtualDeviceSelected={(sel, device) => {
-                logger.info(`${sel} ${device} selected`);
-                // const virtualDevice: Device = {
-                //     id: 0,
-                //     traits: {},
-                // };
-                // dispatch(open(virtualDevice));
-            }}
-            onVirtualDeviceDeselected={sel => {
-                logger.info('Deselecting virtual device', sel);
-                // dispatch(close());
-            }}
+            // virtualDevices={['ADV-PPK1', 'ADV-PPK2']}
+            // onVirtualDeviceSelected={(sel, device) => {
+            //     logger.info(`${sel} ${device} selected`);
+            //     const deviceItem:DeviceItem = {
+            //         id: sel,
+            //         portName: "Virtual Device",
+            //         isSmuMode: false,
+            //         deviceRunning: false,
+            //         capabilities: {},
+            //     }
+            //     dispatch(updateDevice(deviceItem));
+            //     const virtualDevice: Device = {
+            //         id: 0,
+            //         traits: {},
+            //         serialNumber: "Virtual Device",
+            //     };
+            //     dispatch(open(virtualDevice));
+            //     dispatch(setSelectedDevice(sel));
+            // }}
+            // onVirtualDeviceDeselected={sel => {
+            //     logger.info('Deselecting virtual device', sel);
+            //     // dispatch(close());
+            //     dispatch(removeDevice(sel));
+            // }}
         />
+    );
+
+    return (
+        <div>
+            {selectorList.length > 1 ? (
+                multiDeviceSelector
+            ) : (
+                <DeviceSelector
+                    deviceSetupConfig={deviceSetupConfig}
+                    deviceListing={deviceListing}
+                    onDeviceConnected={device =>
+                        logger.info(
+                            `Device Connected SN:${device.serialNumber}`
+                        )
+                    }
+                    onDeviceDisconnected={device =>
+                        logger.info(
+                            `Device Disconnected SN:${device.serialNumber}`
+                        )
+                    }
+                    onDeviceSelected={(sel, device) => {
+                        if (device.traits.jlink) {
+                            dispatch(setShowPPK1Dialog(true));
+                        }
+                        logger.info(
+                            `Validating firmware for device with s/n ${device.serialNumber} ${sel}`
+                        );
+                    }}
+                    onDeviceIsReady={(sel, device) => {
+                        logger.info(
+                            `Opening device with s/n ${device.serialNumber} ${sel}`
+                        );
+                        dispatch(open(device));
+                    }}
+                    onDeviceDeselected={sel => {
+                        logger.info('Deselecting device', sel);
+                        dispatch(close());
+                    }}
+                />
+            )}
+        </div>
     );
 };

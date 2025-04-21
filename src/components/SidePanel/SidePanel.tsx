@@ -9,9 +9,11 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
     addConfirmBeforeClose,
     Button,
+    classNames,
     clearConfirmBeforeClose,
     Group,
     selectedDevice,
+    selectedVirtualDevice,
     SidePanel,
     Spinner,
 } from '@nordicsemiconductor/pc-nrfconnect-shared';
@@ -27,9 +29,19 @@ import {
 } from '../../slices/appSlice';
 import { isSessionActive } from '../../slices/chartSlice';
 import { resetGainsToDefaults } from '../../slices/gainsSlice';
+import {
+    getDeviceSelectorList,
+    getMultiDevices,
+    getSelectedDeviceIndex,
+    setSelectedDevice,
+} from '../../slices/multiDeviceSlice';
 import { resetSpikeFilterToDefaults } from '../../slices/spikeFilterSlice';
 import { resetVoltageRegulatorMaxCapPPK2 } from '../../slices/voltageRegulatorSlice';
-import { isDataLoggerPane, isScopePane } from '../../utils/panes';
+import {
+    isDataLoggerPane,
+    isMultiDevicePane,
+    isScopePane,
+} from '../../utils/panes';
 import { CapVoltageSettings } from './CapVoltageSettings';
 import DisplayOptions from './DisplayOptions';
 import Gains from './Gains';
@@ -61,13 +73,19 @@ const useConfirmBeforeClose = () => {
 
 export default () => {
     const dispatch = useDispatch();
+    const deviceIndex = useSelector(getSelectedDeviceIndex);
     const deviceConnected = useSelector(selectedDevice);
+    const virtualDeviceConnected = useSelector(selectedVirtualDevice);
     const deviceOpen = useSelector(deviceOpenSelector);
     const fileLoaded = useSelector(isFileLoaded);
     const sessionActive = useSelector(isSessionActive);
     const showProgressDialog = useSelector(getShowProgressDialog);
     const scopePane = useSelector(isScopePane);
     const dataLoggerPane = useSelector(isDataLoggerPane);
+    const multiDevicePane = useSelector(isMultiDevicePane);
+
+    const selectors = useSelector(getDeviceSelectorList);
+    const devices = useSelector(getMultiDevices);
 
     useConfirmBeforeClose();
 
@@ -83,20 +101,44 @@ export default () => {
         );
     }
 
+    const multiDeviceSelector = selectors.map((sel, i) => {
+        const device = devices.find(d => d.selector === i);
+
+        return (
+            <button
+                type="button"
+                key={`d${i + 1}`}
+                className={classNames(
+                    'tw-h-6 tw-grow tw-border tw-border-solid tw-border-gray-700 tw-leading-none',
+                    i === deviceIndex
+                        ? 'tw-bg-white tw-text-gray-700'
+                        : 'tw-bg-gray-700 tw-text-white'
+                )}
+                value={i}
+                onClick={() => dispatch(setSelectedDevice(i))}
+            >
+                {device?.portName ?? sel}
+            </button>
+        );
+    });
+
     return (
         <SidePanel className="side-panel tw-mt-9">
-            {!deviceConnected && <Load />}
-            {!fileLoaded && !deviceConnected && !sessionActive && (
-                <Instructions />
-            )}
-            {!fileLoaded && deviceOpen && (scopePane || dataLoggerPane) && (
-                <>
-                    <PowerMode />
-                    <StartStop />
-                </>
-            )}
+            {!deviceConnected && !virtualDeviceConnected && <Load />}
+            {!fileLoaded &&
+                !deviceConnected &&
+                !virtualDeviceConnected &&
+                !sessionActive && <Instructions />}
+            {!fileLoaded &&
+                deviceOpen &&
+                (scopePane || dataLoggerPane || multiDevicePane) && (
+                    <>
+                        <PowerMode />
+                        <StartStop />
+                    </>
+                )}
             {(fileLoaded || deviceOpen || sessionActive) &&
-                (scopePane || dataLoggerPane) && (
+                (scopePane || dataLoggerPane || multiDevicePane) && (
                     <>
                         <Save />
                         <DisplayOptions />
@@ -127,6 +169,11 @@ export default () => {
                         Reset to default Configuration
                     </Button>
                 </Group>
+            )}
+            {multiDevicePane && devices.length > 1 && (
+                <div className="tw-flex tw-flex-row tw-gap-0.5">
+                    {multiDeviceSelector}
+                </div>
             )}
             <DeprecatedDeviceDialog />
             {showProgressDialog && <ProgressDialog />}

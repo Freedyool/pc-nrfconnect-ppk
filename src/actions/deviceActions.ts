@@ -62,6 +62,7 @@ import {
     setSamplingAttrsAction,
 } from '../slices/dataLoggerSlice';
 import { updateGainsAction } from '../slices/gainsSlice';
+import { DeviceItem, updateDevice } from '../slices/multiDeviceSlice';
 import {
     clearProgress,
     getTriggerRecordingLength,
@@ -80,6 +81,21 @@ import { setSpikeFilter as persistSpikeFilter } from '../utils/persistentStore';
 let device: null | SerialDevice = null;
 let updateRequestInterval: NodeJS.Timeout | undefined;
 let releaseFileWriteListener: (() => void) | undefined;
+
+interface MyDevice {
+    selector: number;
+    device: SerialDevice;
+}
+
+const devices: MyDevice[] = [];
+
+function getDevice(selector: number): SerialDevice | undefined {
+    const deviceItem = devices.find(d => d.selector === selector);
+    if (deviceItem) {
+        return deviceItem.device;
+    }
+    return undefined;
+}
 
 export const setupOptions =
     (recordingMode: RecordingMode): AppThunk<RootState, Promise<void>> =>
@@ -578,4 +594,260 @@ export const processTrigger =
         } catch (e) {
             logger.debug(describeError(e));
         }
+    };
+
+export const myclose =
+    (sel: number): AppThunk<RootState, Promise<void>> =>
+    async (dispatch, getState) => {
+        const mydevice = getDevice(sel);
+        // clearInterval(updateRequestInterval);
+        if (!mydevice) {
+            return;
+        }
+        if (getState().app.app.samplingRunning) {
+            await dispatch(samplingStop());
+        }
+
+        await mydevice.stop();
+        // device.removeAllListeners();
+        // device = null;
+        dispatch(deviceClosedAction());
+        logger.info('PPK closed', sel);
+    };
+
+export const myopen =
+    (sel: number, deviceInfo: Device): AppThunk<RootState, Promise<void>> =>
+    async (dispatch, getState) => {
+        // TODO: Check if this is right?
+        // Is this suppose to be run when another device is already connected?
+        // Seems like it closes old device somewhere else first, meaning this is redundant.
+        // if (getState().app.app.portName) {
+        //     await dispatch(myclose(index));
+        // }
+
+        let prevValue = 0;
+        let prevCappedValue: number | undefined;
+        let prevBits = 0;
+        let nbSamples = 0;
+        let nbSamplesTotal = 0;
+
+        const onSample = ({ value, bits }: SampleValues) => {
+            const {
+                app: { samplingRunning },
+                dataLogger: { maxSampleFreq },
+            } = getState().app;
+            const sampleFreq = getSampleFrequency(getState());
+            if (!samplingRunning) {
+                return;
+            }
+
+            let cappedValue = value ?? 0.2;
+            // PPK 2 can only read till 200nA (0.2uA)
+            if (cappedValue < 0.2) {
+                cappedValue = 0;
+            }
+
+            const b16 = convertBits16(bits!);
+
+            if (samplingRunning && sampleFreq < maxSampleFreq) {
+                const samplesPerAverage = maxSampleFreq / sampleFreq;
+                nbSamples += 1;
+                nbSamplesTotal += 1;
+                const f = Math.min(nbSamplesTotal, samplesPerAverage);
+                if (Number.isFinite(value) && Number.isFinite(prevValue)) {
+                    cappedValue = prevValue + (cappedValue - prevValue) / f;
+                }
+                if (nbSamples < samplesPerAverage) {
+                    if (value !== undefined) {
+                        prevValue = cappedValue;
+                        prevBits |= b16;
+                    }
+                    return;
+                }
+                nbSamples = 0;
+            }
+
+            DataManager().addData(cappedValue, b16 | prevBits);
+            prevBits = 0;
+
+            if (getRecordingMode(getState()) === 'Scope') {
+                const validTriggerValue =
+                    prevCappedValue != null &&
+                    prevCappedValue < getState().app.trigger.level &&
+                    cappedValue >= getState().app.trigger.level;
+                prevCappedValue = cappedValue;
+
+                if (!DataManager().isInSync()) {
+                    return;
+                }
+
+                if (!getState().app.trigger.active && validTriggerValue) {
+                    if (latestTrigger !== undefined) {
+                        return;
+                    }
+
+                    if (!isSavePending(getState())) {
+                        dispatch(setSavePending(true));
+                    }
+                    dispatch(setTriggerActive(true));
+                    dispatch(
+                        processTrigger(
+                            cappedValue,
+                            getTriggerRecordingLength(getState()) * 1000, // ms to uS
+                            (progressMessage, prog) => {
+                                dispatch(
+                                    setProgress({
+                                        progressMessage,
+                                        progress:
+                                            prog && prog >= 0
+                                                ? prog
+                                                : undefined,
+                                    })
+                                );
+                            }
+                        )
+                    ).then(() => {
+                        if (!DataManager().hasPendingTriggers()) {
+                            dispatch(clearProgress());
+                        }
+                        if (
+                            samplingRunning &&
+                            getState().app.trigger.type === 'Single'
+                        ) {
+                            dispatch(samplingStop());
+                        }
+                    });
+                } else if (
+                    getState().app.trigger.active &&
+                    !validTriggerValue &&
+                    getState().app.trigger.type === 'Continuous'
+                ) {
+                    dispatch(setTriggerActive(false));
+                }
+            } else if (!isSavePending(getState())) {
+                dispatch(setSavePending(true));
+            }
+
+            const durationInMicroSeconds =
+                convertTimeToSeconds(
+                    getState().app.dataLogger.duration,
+                    getState().app.dataLogger.durationUnit
+                ) * microSecondsPerSecond;
+            if (durationInMicroSeconds <= DataManager().getTimestamp()) {
+                if (samplingRunning) {
+                    dispatch(samplingStop());
+                }
+            }
+        };
+
+        try {
+            const mydevice = new SerialDevice(deviceInfo, onSample);
+
+            // dispatch(
+            //     setSamplingAttrsAction({
+            //         maxContiniousSamplingTimeUs:
+            //             device.capabilities.maxContinuousSamplingTimeUs!,
+            //     })
+            // );
+
+            // dispatch(
+            //     setDeviceRunningAction({
+            //         isRunning: device.isRunningInitially,
+            //     })
+            // );
+            const metadata = mydevice.parseMeta(await mydevice.start());
+
+            // await device.ppkUpdateRegulator(metadata.vdd);
+            // dispatch(
+            //     updateRegulatorAction({
+            //         vdd: metadata.vdd,
+            //         currentVDD: metadata.vdd,
+            //         ...device.vddRange,
+            //     })
+            // );
+            // await dispatch(initGains());
+            // dispatch(updateSpikeFilter());
+            const isSmuMode = metadata.mode === 2;
+            // 1 = Ampere
+            // 2 = SMU
+            // dispatch(setPowerModeAction({ isSmuMode }));
+            // if (!isSmuMode) dispatch(setDeviceRunning(true));
+
+            // dispatch(clearFileLoadedAction());
+
+            const deviceItem: DeviceItem = {
+                selector: sel,
+                portName: deviceInfo.serialNumber,
+                isSmuMode,
+                deviceRunning: !isSmuMode,
+                capabilities: mydevice.capabilities,
+            };
+            dispatch(updateDevice(deviceItem));
+
+            devices.push({ selector: sel, device: mydevice });
+
+            logger.info('PPK started', sel);
+        } catch (err) {
+            logger.error('Failed to start PPK', sel);
+            logger.debug(err);
+            dispatch({ type: 'device/deselectDevice' });
+        }
+
+        const mydevice = getDevice(sel);
+
+        dispatch(
+            deviceOpenedAction({
+                portName: deviceInfo.serialNumber,
+                capabilities: mydevice!.capabilities,
+            })
+        );
+
+        logger.info('PPK opened', sel);
+
+        mydevice!.on('error', (message, error) => {
+            logger.error(message);
+            if (error) {
+                dispatch(myclose(sel));
+                logger.debug(error);
+            }
+        });
+
+        // clearInterval(updateRequestInterval);
+        // let renderIndex: number;
+        // let lastRenderRequestTime = 0;
+        // updateRequestInterval = setInterval(() => {
+        //     const now = Date.now();
+        //     if (
+        //         renderIndex !== DataManager().getTotalSavedRecords() &&
+        //         getState().app.app.samplingRunning &&
+        //         isDataLoggerPane(getState()) &&
+        //         (DataManager().isInSync() ||
+        //             now - lastRenderRequestTime >= 1000) // force 1 FPS
+        //     ) {
+        //         const timestamp = now;
+        //         lastRenderRequestTime = now;
+        //         if (getState().app.chart.liveMode) {
+        //             requestAnimationFrame(() => {
+        //                 /*
+        //                     requestAnimationFrame pauses when app is in the background.
+        //                     If timestamp is more than 10ms ago, do not dispatch animationAction.
+        //                 */
+        //                 if (Date.now() - timestamp < 100) {
+        //                     dispatch(animationAction());
+        //                 }
+        //             });
+        //         }
+
+        //         requestAnimationFrame(() => {
+        //             /*
+        //                 requestAnimationFrame pauses when app is in the background.
+        //                 If timestamp is more than 10ms ago, do not dispatch animationAction.
+        //             */
+        //             if (Date.now() - timestamp < 100) {
+        //                 dispatch(miniMapAnimationAction());
+        //             }
+        //         });
+        //         renderIndex = DataManager().getTotalSavedRecords();
+        //     }
+        // }, Math.max(30, DataManager().getSamplingTime() / 1000));
     };

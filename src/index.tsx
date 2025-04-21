@@ -21,7 +21,12 @@ import { updateTitle } from './globals';
 import reducers from './slices';
 import { getFileLoaded, isSavePending } from './slices/appSlice';
 import { getRecordingMode } from './slices/chartSlice';
-import { isDataLoggerPane, isScopePane, Panes } from './utils/panes';
+import {
+    isDataLoggerPane,
+    isMultiDevicePane,
+    isScopePane,
+    Panes,
+} from './utils/panes';
 
 import './index.scss';
 
@@ -57,11 +62,13 @@ const ChartWrapper: React.FC<{ active: boolean }> = ({ active }) => {
     const currentMode = useSelector(getRecordingMode);
     const dataLoggerPane = useSelector(isDataLoggerPane);
     const scopePane = useSelector(isScopePane);
+    const multiDevicePane = useSelector(isMultiDevicePane);
     const paneName = currentMode === 'DataLogger' ? 'Data Logger' : 'Scope';
 
     if (
         (currentMode === 'DataLogger' && !dataLoggerPane) ||
-        (currentMode === 'Scope' && !scopePane)
+        (currentMode === 'Scope' && !scopePane) ||
+        (currentMode === 'MultiDevice' && !multiDevicePane)
     )
         return (
             <div className="tw-flex tw-h-full tw-items-center tw-justify-center">
