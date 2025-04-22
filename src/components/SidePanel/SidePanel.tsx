@@ -18,7 +18,11 @@ import {
     Spinner,
 } from '@nordicsemiconductor/pc-nrfconnect-shared';
 
-import { updateAllGains, updateSpikeFilter } from '../../actions/deviceActions';
+import {
+    switchCurrentDevice,
+    updateAllGains,
+    updateSpikeFilter,
+} from '../../actions/deviceActions';
 import DeprecatedDeviceDialog from '../../features/DeprecatedDevice/DeprecatedDevice';
 import ProgressDialog from '../../features/ProgressDialog/ProgressDialog';
 import { getShowProgressDialog } from '../../features/ProgressDialog/progressSlice';
@@ -26,17 +30,21 @@ import {
     deviceOpen as deviceOpenSelector,
     isFileLoaded,
     isSavePending,
+    updateCurrentDeviceAction,
 } from '../../slices/appSlice';
 import { isSessionActive } from '../../slices/chartSlice';
 import { resetGainsToDefaults } from '../../slices/gainsSlice';
 import {
     getDeviceSelectorList,
-    getMultiDevices,
     getSelectedDeviceIndex,
     setSelectedDevice,
 } from '../../slices/multiDeviceSlice';
 import { resetSpikeFilterToDefaults } from '../../slices/spikeFilterSlice';
-import { resetVoltageRegulatorMaxCapPPK2 } from '../../slices/voltageRegulatorSlice';
+import {
+    resetVoltageRegulatorMaxCapPPK2,
+    updateRegulator,
+} from '../../slices/voltageRegulatorSlice';
+import { getDevice } from '../../utils/multiDevice';
 import {
     isDataLoggerPane,
     isMultiDevicePane,
@@ -85,7 +93,6 @@ export default () => {
     const multiDevicePane = useSelector(isMultiDevicePane);
 
     const selectors = useSelector(getDeviceSelectorList);
-    const devices = useSelector(getMultiDevices);
 
     useConfirmBeforeClose();
 
@@ -102,7 +109,11 @@ export default () => {
     }
 
     const multiDeviceSelector = selectors.map((sel, i) => {
-        const device = devices.find(d => d.selector === i);
+        let device = getDevice(i);
+
+        if (!device) {
+            return null;
+        }
 
         return (
             <button
@@ -115,9 +126,29 @@ export default () => {
                         : 'tw-bg-gray-700 tw-text-white'
                 )}
                 value={i}
-                onClick={() => dispatch(setSelectedDevice(i))}
+                onClick={() => {
+                    device = getDevice(i);
+
+                    if (!device) {
+                        return null;
+                    }
+
+                    switchCurrentDevice(i);
+                    dispatch(setSelectedDevice(i));
+
+                    dispatch(
+                        updateCurrentDeviceAction({
+                            capabilities: device.capabilities,
+                            portName: device.portName,
+                            isRunning: device.deviceRunning,
+                            isSmuMode: device.isSmuMode,
+                        })
+                    );
+
+                    dispatch(updateRegulator({ vdd: device.currentVdd }));
+                }}
             >
-                {device?.portName ?? sel}
+                {device.portName ?? sel}
             </button>
         );
     });
@@ -170,7 +201,7 @@ export default () => {
                     </Button>
                 </Group>
             )}
-            {multiDevicePane && devices.length > 1 && (
+            {multiDevicePane && (
                 <div className="tw-flex tw-flex-row tw-gap-0.5">
                     {multiDeviceSelector}
                 </div>

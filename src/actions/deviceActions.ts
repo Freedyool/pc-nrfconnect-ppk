@@ -43,6 +43,7 @@ import {
     setDeviceRunningAction,
     setPowerModeAction,
     setSavePending,
+    updateCurrentDeviceAction,
 } from '../slices/appSlice';
 import {
     animationAction,
@@ -62,7 +63,7 @@ import {
     setSamplingAttrsAction,
 } from '../slices/dataLoggerSlice';
 import { updateGainsAction } from '../slices/gainsSlice';
-import { DeviceItem, updateDevice } from '../slices/multiDeviceSlice';
+import { setSelectedDevice } from '../slices/multiDeviceSlice';
 import {
     clearProgress,
     getTriggerRecordingLength,
@@ -75,27 +76,20 @@ import { updateRegulator as updateRegulatorAction } from '../slices/voltageRegul
 import { convertBits16 } from '../utils/bitConversion';
 import { convertTimeToSeconds } from '../utils/duration';
 import { isDiskFull } from '../utils/fileUtils';
+import {
+    addDevice,
+    getDevice,
+    MultiDeviceItem,
+    removeDevice,
+    updateDevice,
+} from '../utils/multiDevice';
 import { isDataLoggerPane } from '../utils/panes';
 import { setSpikeFilter as persistSpikeFilter } from '../utils/persistentStore';
 
 let device: null | SerialDevice = null;
+let selector: null | number = null;
 let updateRequestInterval: NodeJS.Timeout | undefined;
 let releaseFileWriteListener: (() => void) | undefined;
-
-interface MyDevice {
-    selector: number;
-    device: SerialDevice;
-}
-
-const devices: MyDevice[] = [];
-
-function getDevice(selector: number): SerialDevice | undefined {
-    const deviceItem = devices.find(d => d.selector === selector);
-    if (deviceItem) {
-        return deviceItem.device;
-    }
-    return undefined;
-}
 
 export const setupOptions =
     (recordingMode: RecordingMode): AppThunk<RootState, Promise<void>> =>
@@ -455,6 +449,7 @@ export const updateRegulator =
         await device!.ppkUpdateRegulator(vdd);
         logger.info(`Voltage regulator updated to ${vdd} mV`);
         dispatch(updateRegulatorAction({ currentVDD: vdd }));
+        updateDevice(selector!, { currentVdd: vdd });
     };
 
 export const updateGains =
@@ -489,6 +484,7 @@ export const setDeviceRunning =
         await device!.ppkDeviceRunning(isRunning ? 1 : 0);
         logger.info(`DUT ${isRunning ? 'ON' : 'OFF'}`);
         dispatch(setDeviceRunningAction({ isRunning }));
+        updateDevice(selector!, { deviceRunning: isRunning });
     };
 
 export const setPowerMode =
@@ -504,6 +500,7 @@ export const setPowerMode =
             dispatch(setPowerModeAction({ isSmuMode: false }));
             await dispatch(setDeviceRunning(true));
         }
+        updateDevice(selector!, { isSmuMode });
     };
 
 let latestTrigger: Promise<unknown> | undefined;
@@ -599,7 +596,7 @@ export const processTrigger =
 export const myclose =
     (sel: number): AppThunk<RootState, Promise<void>> =>
     async (dispatch, getState) => {
-        const mydevice = getDevice(sel);
+        const mydevice = getDevice(sel)?.device;
         // clearInterval(updateRequestInterval);
         if (!mydevice) {
             return;
@@ -610,7 +607,7 @@ export const myclose =
 
         await mydevice.stop();
         // device.removeAllListeners();
-        // device = null;
+        removeDevice(sel);
         dispatch(deviceClosedAction());
         logger.info('PPK closed', sel);
     };
@@ -740,6 +737,15 @@ export const myopen =
             }
         };
 
+        dispatch(
+            updateCurrentDeviceAction({
+                capabilities: {},
+                portName: null,
+                isRunning: false,
+                isSmuMode: false,
+            })
+        );
+
         try {
             const mydevice = new SerialDevice(deviceInfo, onSample);
 
@@ -750,41 +756,50 @@ export const myopen =
             //     })
             // );
 
-            // dispatch(
-            //     setDeviceRunningAction({
-            //         isRunning: device.isRunningInitially,
-            //     })
-            // );
+            dispatch(
+                setDeviceRunningAction({
+                    isRunning: mydevice.isRunningInitially,
+                })
+            );
             const metadata = mydevice.parseMeta(await mydevice.start());
 
-            // await device.ppkUpdateRegulator(metadata.vdd);
-            // dispatch(
-            //     updateRegulatorAction({
-            //         vdd: metadata.vdd,
-            //         currentVDD: metadata.vdd,
-            //         ...device.vddRange,
-            //     })
-            // );
+            await mydevice.ppkUpdateRegulator(metadata.vdd);
+            dispatch(
+                updateRegulatorAction({
+                    vdd: metadata.vdd,
+                    currentVDD: metadata.vdd,
+                    ...mydevice.vddRange,
+                })
+            );
             // await dispatch(initGains());
             // dispatch(updateSpikeFilter());
             const isSmuMode = metadata.mode === 2;
             // 1 = Ampere
             // 2 = SMU
-            // dispatch(setPowerModeAction({ isSmuMode }));
-            // if (!isSmuMode) dispatch(setDeviceRunning(true));
+            dispatch(setPowerModeAction({ isSmuMode }));
+
+            if (!isSmuMode) {
+                await mydevice!.ppkDeviceRunning(1);
+                logger.info('DUT ON');
+                dispatch(setDeviceRunningAction({ isRunning: true }));
+            }
 
             // dispatch(clearFileLoadedAction());
 
-            const deviceItem: DeviceItem = {
+            const deviceItem: MultiDeviceItem = {
                 selector: sel,
+                device: mydevice,
                 portName: deviceInfo.serialNumber,
                 isSmuMode,
                 deviceRunning: !isSmuMode,
                 capabilities: mydevice.capabilities,
+                currentVdd: metadata.vdd,
             };
-            dispatch(updateDevice(deviceItem));
 
-            devices.push({ selector: sel, device: mydevice });
+            addDevice(deviceItem);
+            dispatch(setSelectedDevice(sel));
+
+            device = mydevice;
 
             logger.info('PPK started', sel);
         } catch (err) {
@@ -793,18 +808,16 @@ export const myopen =
             dispatch({ type: 'device/deselectDevice' });
         }
 
-        const mydevice = getDevice(sel);
-
         dispatch(
             deviceOpenedAction({
                 portName: deviceInfo.serialNumber,
-                capabilities: mydevice!.capabilities,
+                capabilities: device!.capabilities,
             })
         );
 
         logger.info('PPK opened', sel);
 
-        mydevice!.on('error', (message, error) => {
+        device!.on('error', (message, error) => {
             logger.error(message);
             if (error) {
                 dispatch(myclose(sel));
@@ -851,3 +864,8 @@ export const myopen =
         //     }
         // }, Math.max(30, DataManager().getSamplingTime() / 1000));
     };
+
+export const switchCurrentDevice = (sel: number) => {
+    selector = sel;
+    device = getDevice(sel)?.device || null;
+};

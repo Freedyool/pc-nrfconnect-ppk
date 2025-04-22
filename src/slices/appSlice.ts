@@ -103,6 +103,20 @@ const appSlice = createSlice({
         setSavePending: (state, action: PayloadAction<boolean>) => {
             state.savePending = action.payload;
         },
+        updateCurrentDeviceAction: (
+            state,
+            action: PayloadAction<{
+                capabilities: any;
+                portName: any;
+                isRunning: boolean;
+                isSmuMode: boolean;
+            }>
+        ) => {
+            state.portName = action.payload.portName;
+            state.capabilities = action.payload.capabilities;
+            state.deviceRunning = action.payload.isRunning;
+            state.isSmuMode = action.payload.isSmuMode;
+        },
     },
 });
 
@@ -135,6 +149,7 @@ export const {
     setDiskFullTrigger,
     setSavePending,
     clearFileLoadedAction,
+    updateCurrentDeviceAction,
 } = appSlice.actions;
 
 export default appSlice.reducer;

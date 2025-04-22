@@ -17,13 +17,7 @@ import {
 
 import { close, myclose, myopen, open } from '../actions/deviceActions';
 import { setShowPPK1Dialog } from '../features/DeprecatedDevice/DeprecatedDeviceSlice';
-import {
-    DeviceItem,
-    getDeviceSelectorList,
-    removeDevice,
-    setSelectedDevice,
-    updateDevice,
-} from '../slices/multiDeviceSlice';
+import { getDeviceSelectorList } from '../slices/multiDeviceSlice';
 
 const deviceListing = {
     nordicUsb: true,
@@ -79,15 +73,6 @@ export default () => {
                 logger.info(
                     `${sel} Validating firmware for device with s/n ${device.serialNumber}`
                 );
-                const deviceItem: DeviceItem = {
-                    selector: sel,
-                    portName: device.serialNumber,
-                    isSmuMode: false,
-                    deviceRunning: false,
-                    capabilities: {},
-                };
-                dispatch(updateDevice(deviceItem));
-                dispatch(setSelectedDevice(sel));
             }}
             onDeviceIsReady={(sel, device) => {
                 logger.info(`Opening device with s/n ${device.serialNumber}`);
@@ -95,7 +80,6 @@ export default () => {
             }}
             onDeviceDeselected={sel => {
                 logger.info('Deselecting device', sel);
-                dispatch(removeDevice(sel));
                 dispatch(myclose(sel));
             }}
             // virtualDevices={['ADV-PPK1', 'ADV-PPK2']}
