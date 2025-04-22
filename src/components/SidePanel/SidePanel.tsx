@@ -129,12 +129,13 @@ export default () => {
                 onClick={() => {
                     device = getDevice(i);
 
+                    dispatch(setSelectedDevice(i));
+
                     if (!device) {
                         return null;
                     }
 
-                    switchCurrentDevice(i);
-                    dispatch(setSelectedDevice(i));
+                    switchCurrentDevice(i, device.device);
 
                     dispatch(
                         updateCurrentDeviceAction({
@@ -148,7 +149,7 @@ export default () => {
                     dispatch(updateRegulator({ vdd: device.currentVdd }));
                 }}
             >
-                {device.portName ?? sel}
+                {device?.portName ?? sel}
             </button>
         );
     });

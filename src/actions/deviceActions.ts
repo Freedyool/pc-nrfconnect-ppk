@@ -79,6 +79,7 @@ import { isDiskFull } from '../utils/fileUtils';
 import {
     addDevice,
     getDevice,
+    getDeviceCount,
     MultiDeviceItem,
     removeDevice,
     updateDevice,
@@ -608,7 +609,11 @@ export const myclose =
         await mydevice.stop();
         // device.removeAllListeners();
         removeDevice(sel);
-        dispatch(deviceClosedAction());
+
+        if (getDeviceCount() === 0) {
+            dispatch(deviceClosedAction());
+        }
+
         logger.info('PPK closed', sel);
     };
 
@@ -865,7 +870,7 @@ export const myopen =
         // }, Math.max(30, DataManager().getSamplingTime() / 1000));
     };
 
-export const switchCurrentDevice = (sel: number) => {
+export const switchCurrentDevice = (sel: number, dev: SerialDevice) => {
     selector = sel;
-    device = getDevice(sel)?.device || null;
+    device = dev;
 };

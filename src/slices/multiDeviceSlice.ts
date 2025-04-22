@@ -31,6 +31,12 @@ const multiDeviceSlice = createSlice({
         setSelectedDevice: (state, action: PayloadAction<number>) => {
             state.deviceSelected = action.payload;
         },
+        addDeviceCount: state => {
+            state.deviceConnectedCount += 1;
+        },
+        reduceDeviceCount: state => {
+            state.deviceConnectedCount -= 1;
+        },
     },
 });
 
@@ -42,7 +48,11 @@ export const getDeviceSelectorList = (state: RootState) =>
 export const getDeviceConnectedCount = (state: RootState) =>
     state.app.multiDevice.deviceConnectedCount;
 
-export const { setDeviceSelectorList, setSelectedDevice } =
-    multiDeviceSlice.actions;
+export const {
+    setDeviceSelectorList,
+    addDeviceCount,
+    reduceDeviceCount,
+    setSelectedDevice,
+} = multiDeviceSlice.actions;
 
 export default multiDeviceSlice.reducer;
