@@ -45,6 +45,8 @@ export const getSelectedDeviceIndex = (state: RootState) =>
     state.app.multiDevice.deviceSelected;
 export const getDeviceSelectorList = (state: RootState) =>
     state.app.multiDevice.deviceSelectorList;
+export const getDeviceSelectorCount = (state: RootState) =>
+    state.app.multiDevice.deviceSelectorList.length;
 export const getDeviceConnectedCount = (state: RootState) =>
     state.app.multiDevice.deviceConnectedCount;
 

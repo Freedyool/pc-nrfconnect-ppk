@@ -58,6 +58,7 @@ class SerialDevice extends Device {
     private adcMult = 1.8 / 163840;
 
     // This are all declared to make typescript aware of their existence.
+    private channel: number;
     private spikeFilter;
     private path;
     private child;
@@ -73,9 +74,12 @@ class SerialDevice extends Device {
 
     constructor(
         device: SharedDevice,
-        onSampleCallback: (values: SampleValues) => void
+        onSampleCallback: (values: SampleValues, chan: number) => void,
+        channel: number
     ) {
         super(onSampleCallback);
+
+        this.channel = channel;
 
         this.capabilities.maxContinuousSamplingTimeUs = this.adcSamplingTimeUs;
         this.capabilities.samplingTimeUs = this.adcSamplingTimeUs;
@@ -258,7 +262,10 @@ class SerialDevice extends Device {
                 counter === this.expectedCounter
             ) {
                 while (this.corruptedSamples.length > 0) {
-                    this.onSampleCallback(this.corruptedSamples.shift()!);
+                    this.onSampleCallback(
+                        this.corruptedSamples.shift()!,
+                        this.channel
+                    );
                 }
                 this.corruptedSamples = [];
             } else if (this.corruptedSamples.length > 4) {
@@ -267,7 +274,7 @@ class SerialDevice extends Device {
                     MAX_PAYLOAD_COUNTER;
                 this.dataLossReport(missingSamples);
                 for (let i = 0; i < missingSamples; i += 1) {
-                    this.onSampleCallback({});
+                    this.onSampleCallback({}, this.channel);
                 }
                 this.expectedCounter = counter;
                 this.corruptedSamples = [];
@@ -278,7 +285,7 @@ class SerialDevice extends Device {
             this.expectedCounter += 1;
             this.expectedCounter &= MAX_PAYLOAD_COUNTER;
             // Only fire the event, if the buffer data is valid
-            this.onSampleCallback({ value, bits });
+            this.onSampleCallback({ value, bits }, this.channel);
         } catch (err: unknown) {
             // TODO: This does not consistently handle all possibilites
             // Even though we expect all err to be instance of Error we should
@@ -288,7 +295,7 @@ class SerialDevice extends Device {
                 console.log(err.message, 'original value', adcValue);
             }
             // to keep timestamp consistent, undefined must be emitted
-            this.onSampleCallback({});
+            this.onSampleCallback({}, this.channel);
         }
     }
 

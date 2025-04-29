@@ -88,14 +88,14 @@ export default () => {
         dispatch(resetCursor());
         resetCache();
 
-        const mode: RecordingMode = scopePane ? 'Scope' : 'DataLogger';
+        const mode: RecordingMode = recordingMode || 'None';
 
         telemetry.sendEvent('StartSampling', {
             mode,
             samplesPerSecond: DataManager().getSamplesPerSecond(),
         });
 
-        if (mode === 'DataLogger') {
+        if (mode === 'DataLogger' || mode === 'MultiDevice') {
             if (!fs.existsSync(sessionFolder)) {
                 logger.error(
                     `Temp Disk root folder '${sessionFolder}' does not exists. Change the root directory in the Temp Disk settings on the side panel.`

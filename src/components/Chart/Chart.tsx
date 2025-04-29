@@ -202,7 +202,9 @@ const updateChart = async (
 const Chart = () => {
     const dispatch = useDispatch<AppDispatch>();
     const recordingMode = useSelector(getRecordingMode);
-    const liveMode = useSelector(isLiveMode) && recordingMode === 'DataLogger';
+    const liveMode =
+        useSelector(isLiveMode) &&
+        (recordingMode === 'DataLogger' || recordingMode === 'MultiDevice');
     const rerenderTrigger = useSelector(getForceRerender);
     const samplingRunning = useSelector(isSamplingRunning);
     const triggerProgress = useSelector(getProgress);

@@ -51,7 +51,9 @@ export default abstract class Device extends EventEmitter {
     public traits!: DeviceTraits;
     public adcSamplingTimeUs!: number;
 
-    constructor(onSampleCallback: (values: SampleValues) => unknown) {
+    constructor(
+        onSampleCallback: (values: SampleValues, chan: number) => unknown
+    ) {
         super();
         this.capabilities = {};
         getAllPropertyNames(this)

@@ -22,16 +22,16 @@ const initialSamplingTime = 10;
 const initialSamplesPerSecond = 1e6 / initialSamplingTime;
 export const microSecondsPerSecond = 1e6;
 
-const tempBuffer = new Uint8Array(6);
-const tempView = new DataView(tempBuffer.buffer);
+const tempBuffers: Uint8Array[] = [];
+const tempViews: DataView[] = [];
 
 export interface GlobalOptions {
     /** The number of samples per second */
     samplesPerSecond: number;
     /** @var index: pointer to the index of the last sample in data array */
-    fileBuffer?: FileBuffer;
-    writeBuffer?: WriteBuffer;
-    foldingBuffer?: FoldingBuffer;
+    fileBuffer: FileBuffer[];
+    writeBuffer: WriteBuffer[];
+    foldingBuffer: FoldingBuffer[];
     timeReachedTriggers: {
         timeRange: Range;
         bytesRange: Range;
@@ -46,6 +46,9 @@ export interface GlobalOptions {
 const options: GlobalOptions = {
     samplesPerSecond: initialSamplesPerSecond,
     timeReachedTriggers: [],
+    fileBuffer: [],
+    writeBuffer: [],
+    foldingBuffer: [],
     inSyncOffset: 0,
     lastInSyncTime: 0,
 };
@@ -115,7 +118,11 @@ const getTimestamp = () =>
     !options.fileBuffer
         ? 0
         : indexToTimestamp(
-              options.fileBuffer.getSessionInBytes() / frameSize - 1
+              options.fileBuffer.reduce(
+                  (acc, buffer) =>
+                      Math.max(acc, buffer.getSessionInBytes() / frameSize - 1),
+                  0
+              )
           );
 
 export const normalizeTimeFloor = (time: number) =>
@@ -130,21 +137,23 @@ export const DataManager = () => ({
     setSamplesPerSecond: (samplesPerSecond: number) => {
         options.samplesPerSecond = samplesPerSecond;
     },
-    getSessionFolder: () => options.fileBuffer?.getSessionFolder(),
+    getSessionFolder: (chan = 0) =>
+        options.fileBuffer[chan]?.getSessionFolder(),
     getData: async (
         buffer: Buffer,
         fromTime = 0,
         toTime = getTimestamp(),
         bias: 'start' | 'end' | undefined = undefined,
-        onLoading: (loading: boolean) => void = () => {}
+        onLoading: (loading: boolean) => void = () => {},
+        chan = 0
     ) => {
         // NOTE: only one getData per buffer should bhe executed at any given time
 
-        if (options.fileBuffer === undefined) {
+        if (options.fileBuffer[chan] === undefined) {
             return new FileData(Buffer.alloc(0), 0);
         }
 
-        if (options.fileBuffer.getSessionInBytes() === 0) {
+        if (options.fileBuffer[chan].getSessionInBytes() === 0) {
             return new FileData(Buffer.alloc(0), 0);
         }
 
@@ -157,7 +166,7 @@ export const DataManager = () => ({
             throw new Error('Buffer is too small');
         }
 
-        const readBytes = await options.fileBuffer.read(
+        const readBytes = await options.fileBuffer[chan].read(
             buffer,
             byteOffset,
             numberOfBytesToRead,
@@ -176,10 +185,10 @@ export const DataManager = () => ({
     },
 
     getTimestamp,
-    isInSync: () => {
+    isInSync: (chan = 0) => {
         const firstWriteTime =
-            options.writeBuffer?.getFirstWriteTime() ??
-            options.fileBuffer?.getFirstWriteTime() ??
+            options.writeBuffer[chan]?.getFirstWriteTime() ??
+            options.fileBuffer[chan]?.getFirstWriteTime() ??
             0;
 
         if (firstWriteTime === 0) return true;
@@ -187,8 +196,8 @@ export const DataManager = () => ({
         const actualTimePassed = Date.now() - firstWriteTime;
 
         const processedBytes =
-            options.writeBuffer?.getBytesWritten() ??
-            options.fileBuffer?.getSessionInBytes() ??
+            options.writeBuffer[chan]?.getBytesWritten() ??
+            options.fileBuffer[chan]?.getSessionInBytes() ??
             0;
 
         const simulationDelta =
@@ -215,26 +224,32 @@ export const DataManager = () => ({
 
         return inSync;
     },
-    getStartSystemTime: () => options.fileBuffer?.getFirstWriteTime(),
+    getStartSystemTime: (chan = 0) =>
+        options.fileBuffer[chan]?.getFirstWriteTime(),
 
-    addData: (current: number, bits: number) => {
+    addData: (current: number, bits: number, chan = 0) => {
         if (
-            options.fileBuffer === undefined &&
-            options.writeBuffer === undefined
+            options.fileBuffer[chan] === undefined &&
+            options.writeBuffer[chan] === undefined
         )
             return;
 
-        tempView.setFloat32(0, current, true);
-        tempView.setUint16(4, bits);
-
-        if (options.writeBuffer) {
-            options.writeBuffer.append(tempBuffer);
-        } else {
-            options.fileBuffer?.append(tempBuffer);
-            options.foldingBuffer?.addData(current, getTimestamp());
+        if (tempViews[chan] === undefined || tempBuffers[chan] === undefined) {
+            tempBuffers[chan] = new Uint8Array(6);
+            tempViews[chan] = new DataView(tempBuffers[chan].buffer);
         }
 
-        const writeBuffer = options.writeBuffer;
+        tempViews[chan].setFloat32(0, current, true);
+        tempViews[chan].setUint16(4, bits);
+
+        if (options.writeBuffer[chan]) {
+            options.writeBuffer[chan].append(tempBuffers[chan]);
+        } else {
+            options.fileBuffer[chan]?.append(tempBuffers[chan]);
+            options.foldingBuffer[chan]?.addData(current, getTimestamp());
+        }
+
+        const writeBuffer = options.writeBuffer[chan];
         if (writeBuffer) {
             const timestamp = indexToTimestamp(
                 writeBuffer.getBytesWritten() / frameSize - 1
@@ -265,33 +280,34 @@ export const DataManager = () => ({
             );
         }
     },
-    flush: () => options.fileBuffer?.flush(),
+    flush: (chan = 0) => options.fileBuffer[chan]?.flush(),
     reset: async () => {
         options.timeReachedTriggers.forEach(trigger => {
             trigger.onFail(new Error('Trigger Aborted'));
         });
         options.timeReachedTriggers = [];
-        await options.fileBuffer?.close();
-        options.fileBuffer?.release();
-        options.fileBuffer = undefined;
-        options.writeBuffer = undefined;
-        options.foldingBuffer = undefined;
+        const res = options.fileBuffer.map(buffer => buffer?.close());
+        await Promise.all(res);
+        options.fileBuffer.forEach(buffer => buffer?.release());
+        options.fileBuffer = [];
+        options.writeBuffer = [];
+        options.foldingBuffer = [];
         options.samplesPerSecond = initialSamplesPerSecond;
         options.inSyncOffset = 0;
     },
-    initializeLiveSession: (sessionRootPath: string) => {
+    initializeLiveSession: (sessionRootPath: string, chan = 0) => {
         const sessionPath = path.join(sessionRootPath, v4());
 
-        options.fileBuffer = new FileBuffer(
+        options.fileBuffer[chan] = new FileBuffer(
             10 * 100_000 * frameSize, // 6 bytes per sample for and 10sec buffers at highest sampling rate
             sessionPath,
             14,
             14
         );
-        options.foldingBuffer = new FoldingBuffer();
+        options.foldingBuffer[chan] = new FoldingBuffer();
     },
-    initializeTriggerSession: (timeToRecordSeconds: number) => {
-        options.writeBuffer = new WriteBuffer(
+    initializeTriggerSession: (timeToRecordSeconds: number, chan = 0) => {
+        options.writeBuffer[chan] = new WriteBuffer(
             timeToRecordSeconds * getSamplesPerSecond() * frameSize
         );
     },
@@ -337,32 +353,36 @@ export const DataManager = () => ({
 
     getTotalSavedRecords: () => timestampToIndex(getTimestamp()) + 1,
 
-    loadData: (sessionPath: string, startSystemTime?: number) => {
-        options.fileBuffer = new FileBuffer(
+    loadData: (sessionPath: string, startSystemTime?: number, chan = 0) => {
+        options.fileBuffer[chan] = new FileBuffer(
             10 * 100_000 * 6, // 6 bytes per sample for and 10sec buffers at highest sampling rate
             sessionPath,
             2,
             30,
             startSystemTime
         );
-        options.foldingBuffer = new FoldingBuffer();
-        options.foldingBuffer.loadFromFile(sessionPath);
+        options.foldingBuffer[chan] = new FoldingBuffer();
+        options.foldingBuffer[chan].loadFromFile(sessionPath);
     },
-    loadSession: (fileBuffer: FileBuffer, foldingBuffer: FoldingBuffer) => {
-        options.fileBuffer = fileBuffer;
-        options.foldingBuffer = foldingBuffer;
+    loadSession: (
+        fileBuffer: FileBuffer,
+        foldingBuffer: FoldingBuffer,
+        chan = 0
+    ) => {
+        options.fileBuffer[chan] = fileBuffer;
+        options.foldingBuffer[chan] = foldingBuffer;
     },
     getNumberOfSamplesInWindow: (windowDuration: number) =>
         timestampToIndex(windowDuration),
-    getMinimapData: () => options.foldingBuffer?.getData() ?? [],
-    getSessionBuffers: () => {
+    getMinimapData: (chan = 0) => options.foldingBuffer[chan]?.getData() ?? [],
+    getSessionBuffers: (chan = 0) => {
         if (!options.fileBuffer || !options.foldingBuffer) {
             throw new Error('One or buffer was missing ');
         }
 
         return {
-            fileBuffer: options.fileBuffer,
-            foldingBuffer: options.foldingBuffer,
+            fileBuffer: options.fileBuffer[chan],
+            foldingBuffer: options.foldingBuffer[chan],
         };
     },
     addTimeReachedTrigger: (recordingLengthMicroSeconds: number) =>
@@ -378,8 +398,11 @@ export const DataManager = () => ({
                 return;
             }
 
-            const currentIndex =
-                options.writeBuffer.getBytesWritten() / frameSize - 1;
+            const currentIndex = options.writeBuffer.reduce(
+                (acc, buffer) =>
+                    Math.min(acc, buffer.getBytesWritten() / frameSize - 1),
+                0
+            );
             const timestamp = indexToTimestamp(currentIndex);
 
             const splitRecordingLengthMicroSeconds =
@@ -419,8 +442,8 @@ export const DataManager = () => ({
             });
         }),
     hasPendingTriggers: () => options.timeReachedTriggers.length > 0,
-    onFileWrite: (listener: () => void) =>
-        options.fileBuffer?.onFileWrite(listener),
+    onFileWrite: (listener: () => void, chan = 0) =>
+        options.fileBuffer[chan]?.onFileWrite(listener),
 });
 
 /**

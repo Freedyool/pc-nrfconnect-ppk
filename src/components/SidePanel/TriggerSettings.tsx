@@ -52,7 +52,7 @@ export default () => {
     const triggerType = useSelector(getTriggerType);
     const { samplingRunning } = useSelector(appState);
     const dataLoggerActive =
-        useSelector(getRecordingMode) === 'DataLogger' && samplingRunning;
+        useSelector(getRecordingMode) !== 'Scope' && samplingRunning;
 
     const [levelUnit, setLevelUnit] = useState<CurrentUnit>('µA');
 
