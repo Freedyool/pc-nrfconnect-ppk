@@ -63,10 +63,7 @@ import {
     setSamplingAttrsAction,
 } from '../slices/dataLoggerSlice';
 import { updateGainsAction } from '../slices/gainsSlice';
-import {
-    getDeviceSelectorCount,
-    setSelectedDevice,
-} from '../slices/multiDeviceSlice';
+import { setSelectedDevice } from '../slices/multiDeviceSlice';
 import {
     clearProgress,
     getTriggerRecordingLength,
@@ -83,6 +80,7 @@ import {
     addDevice,
     getDevice,
     getDeviceCount,
+    getDeviceList,
     MultiDeviceItem,
     removeDevice,
     updateDevice,
@@ -119,18 +117,14 @@ export const setupOptions =
                     DataManager().initializeTriggerSession(60);
                     break;
                 case 'MultiDevice':
-                    for (
-                        let sel = 0;
-                        sel < getDeviceSelectorCount(getState());
-                        sel += 1
-                    ) {
-                        if (getDevice(sel)?.device) {
+                    getDeviceList().forEach((dev, index) => {
+                        if (dev) {
                             DataManager().initializeLiveSession(
                                 getSessionRootFolder(getState()),
-                                sel
+                                index
                             );
                         }
-                    }
+                    });
                     break;
             }
 
@@ -185,7 +179,8 @@ export const samplingStart =
                 DataManager().setSamplesPerSecond(100_000);
                 break;
         }
-        await device!.ppkAverageStart();
+        const res = getDeviceList().map(dev => dev?.ppkAverageStart());
+        await Promise.all(res);
         startPreventSleep();
     };
 
@@ -195,7 +190,8 @@ export const samplingStop =
         if (!device) return;
         dispatch(clearRecordingMode());
         dispatch(samplingStoppedAction());
-        await device.ppkAverageStop();
+        const res = getDeviceList().map(dev => dev?.ppkAverageStop());
+        await Promise.all(res);
         stopPreventSleep();
         releaseFileWriteListener?.();
     };

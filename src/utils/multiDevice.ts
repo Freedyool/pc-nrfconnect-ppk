@@ -61,3 +61,4 @@ export const updateDevice = (
 };
 
 export const getDeviceCount = () => multiDevices.length;
+export const getDeviceList = () => multiDevices.map(d => d.device);

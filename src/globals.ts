@@ -183,6 +183,54 @@ export const DataManager = () => ({
         }
         return new FileData(buffer, readBytes);
     },
+    getAllData: (
+        buffers: Buffer[],
+        fromTime = 0,
+        toTime = getTimestamp(),
+        bias: 'start' | 'end' | undefined = undefined,
+        onLoading: (loading: boolean) => void = () => {}
+    ) => {
+        if (buffers.length !== options.fileBuffer.length) {
+            throw new Error(
+                `Buffers length ${buffers.length} does not match fileBuffer length ${options.fileBuffer.length}`
+            );
+        }
+        return options.fileBuffer.map(async (buffer, index) => {
+            if (buffer === undefined) {
+                return new FileData(Buffer.alloc(0), 0);
+            }
+
+            if (buffer.getSessionInBytes() === 0) {
+                return new FileData(Buffer.alloc(0), 0);
+            }
+
+            const numberOfElements =
+                timestampToIndex(toTime) - timestampToIndex(fromTime) + 1;
+            const byteOffset = timestampToIndex(fromTime) * frameSize;
+            const numberOfBytesToRead = numberOfElements * frameSize;
+
+            if (buffers[index].length < numberOfBytesToRead) {
+                throw new Error('Buffer is too small');
+            }
+
+            const readBytes = await buffer.read(
+                buffers[index],
+                byteOffset,
+                numberOfBytesToRead,
+                bias,
+                onLoading
+            );
+
+            if (readBytes !== numberOfBytesToRead) {
+                console.log(
+                    `missing ${
+                        (numberOfBytesToRead - readBytes) / frameSize
+                    } records`
+                );
+            }
+            return new FileData(buffers[index], readBytes);
+        });
+    },
 
     getTimestamp,
     isInSync: (chan = 0) => {

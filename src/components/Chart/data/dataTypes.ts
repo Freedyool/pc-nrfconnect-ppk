@@ -35,6 +35,12 @@ export interface AmpereState {
     y: AmpereStateType;
 }
 
+export interface MultiAmpereState {
+    name: string;
+    data: AmpereState[];
+    color: string;
+}
+
 export function isBitStateIndexType(
     value: unknown
 ): value is BitStateIndexType {

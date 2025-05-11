@@ -12,18 +12,23 @@ import { formatDurationHTML } from '../../utils/duration';
 import { Value, ValueRaw } from './StatBoxHelpers';
 
 interface StatBoxProperties {
+    color?: string;
     average?: number | null;
     max?: number | null;
     delta?: number | null;
 }
 
 export default ({
+    color = '#000',
     average = null,
     max = null,
     delta = null,
 }: StatBoxProperties) => (
     <div className="tw-preflight tw-flex tw-w-80 tw-grow tw-flex-col tw-gap-1 tw-text-center">
-        <div className="tw-flex tw-h-3.5 tw-items-center tw-justify-between">
+        <div
+            className="tw-flex tw-h-3.5 tw-items-center tw-justify-between"
+            style={{ color }}
+        >
             <h2 className="tw-inline tw-text-[10px] tw-uppercase">Window</h2>
         </div>
         <div className="tw-flex tw-flex-row tw-gap-[1px] tw-border tw-border-solid tw-border-gray-200 tw-bg-gray-200">

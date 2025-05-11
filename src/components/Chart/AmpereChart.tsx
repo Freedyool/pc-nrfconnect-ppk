@@ -36,7 +36,7 @@ import {
 } from '../../slices/triggerSlice';
 import { isScopePane } from '../../utils/panes';
 import { type CursorData } from './Chart';
-import { AmpereState } from './data/dataTypes';
+import { AmpereState, MultiAmpereState } from './data/dataTypes';
 import crossHairPlugin from './plugins/chart.crossHair';
 import dragSelectPlugin, { DragSelect } from './plugins/chart.dragSelect';
 import triggerLevelPlugin from './plugins/chart.triggerLevel';
@@ -45,7 +45,6 @@ import zoomPanPlugin, { ZoomPan } from './plugins/chart.zoomPan';
 
 const yAxisWidth = 64;
 const rightMargin = 32;
-const dataColor = colors.nordicBlue;
 
 interface Cursor {
     cursorBegin?: null | number;
@@ -85,7 +84,7 @@ interface AmpereChartProperties {
     numberOfSamplesPerPixel: number;
     chartRef: React.MutableRefObject<null | AmpereChartJS>;
     cursorData: CursorData;
-    lineData: AmpereState[];
+    lineData: MultiAmpereState[];
     processing: boolean;
     processingMessage?: string;
     processingPercent?: number;
@@ -163,27 +162,25 @@ export default ({
 
     const pointRadius = numberOfSamplesPerPixel <= 0.08 ? 4 : 2;
     const chartDataSets: ChartData<'line', AmpereState[]> = {
-        datasets: [
-            {
-                borderColor: dataColor,
-                borderWidth: numberOfSamplesPerPixel > 2 ? 1 : 1.5,
-                fill: false,
-                data: lineData,
-                pointRadius: snapping ? pointRadius : 0,
-                pointHoverRadius: snapping ? pointRadius : 0,
-                pointHitRadius: snapping ? pointRadius : 0,
-                pointBackgroundColor: colors.white,
-                pointHoverBackgroundColor: dataColor,
-                pointBorderWidth: 1.5,
-                pointHoverBorderWidth: 1.5,
-                pointBorderColor: dataColor,
-                pointHoverBorderColor: dataColor,
-                tension: snapping ? 0.2 : 0,
-                label: 'Current',
-                xAxisID: 'xScale',
-                yAxisID: 'yScale',
-            },
-        ],
+        datasets: lineData.map((t: MultiAmpereState) => ({
+            borderColor: t.color,
+            borderWidth: numberOfSamplesPerPixel > 2 ? 1 : 1.5,
+            fill: false,
+            data: t.data,
+            pointRadius: snapping ? pointRadius : 0,
+            pointHoverRadius: snapping ? pointRadius : 0,
+            pointHitRadius: snapping ? pointRadius : 0,
+            pointBackgroundColor: colors.white,
+            pointHoverBackgroundColor: t.color,
+            pointBorderWidth: 1.5,
+            pointHoverBorderWidth: 1.5,
+            pointBorderColor: t.color,
+            pointHoverBorderColor: t.color,
+            tension: snapping ? 0.2 : 0,
+            label: t.name,
+            xAxisID: 'xScale',
+            yAxisID: 'yScale',
+        })),
     };
 
     const showTriggerItems = scopePane && !fileLoaded;

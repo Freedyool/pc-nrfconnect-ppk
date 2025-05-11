@@ -15,6 +15,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
     AppDispatch,
     AppThunk,
+    colors,
     useHotKey,
 } from '@nordicsemiconductor/pc-nrfconnect-shared';
 import {
@@ -25,6 +26,7 @@ import {
     PointElement,
     Title,
 } from 'chart.js';
+import { range } from 'lodash';
 
 import Minimap from '../../features/minimap/Minimap';
 import {
@@ -60,7 +62,7 @@ import type { AmpereChartJS } from './AmpereChart';
 import AmpereChart from './AmpereChart';
 import ChartTop from './ChartTop';
 import dataAccumulatorInitialiser, { calcStats } from './data/dataAccumulator';
-import { AmpereState, DigitalChannelStates } from './data/dataTypes';
+import { DigitalChannelStates, MultiAmpereState } from './data/dataTypes';
 import DigitalChannels from './DigitalChannels';
 import SelectionStatBox from './SelectionStatBox';
 import TimeSpanBottom from './TimeSpan/TimeSpanBottom';
@@ -76,6 +78,8 @@ ChartJS.register(
     LogarithmicScale,
     Title
 );
+
+const multiColors = [colors.nordicBlue, colors.red, colors.green];
 
 export type CursorData = {
     cursorBegin: number | null | undefined;
@@ -113,14 +117,14 @@ const updateChart = async (
     windowDuration: number,
     windowEnd: number,
     setData: (data: {
-        ampereLineData: AmpereState[];
+        ampereLineData: MultiAmpereState[];
         bitsLineData: DigitalChannelStates[];
     }) => void,
     setProcessing: (processing: boolean) => void,
     setWindowStats: (
         state: {
-            average: number;
-            max: number;
+            average: number[];
+            max: number[];
             delta: number;
         } | null
     ) => void
@@ -147,7 +151,7 @@ const updateChart = async (
             ? digitalChannelsToDisplay
             : [];
 
-    const processedData = await dataProcessor.process(
+    const multiProcessedData = await dataProcessor.process(
         windowBegin,
         windowEnd,
         zoomedOutTooFarForDigitalChannels
@@ -158,39 +162,54 @@ const updateChart = async (
         setProcessing
     );
 
-    const avgTemp = processedData.averageLine.reduce(
-        (previousValue, currentValue) => ({
-            sum: previousValue.sum + currentValue.y,
-            count: previousValue.count + currentValue.count,
-        }),
-        {
-            sum: 0,
-            count: 0,
-        }
-    );
-    const average = avgTemp.sum / avgTemp.count / 1000;
+    const averages: number[] = [];
+    const maxs: number[] = [];
+    const ampereLineData: MultiAmpereState[] = [];
+    const bitsLineData: DigitalChannelStates[] = [];
 
-    const filteredAmpereLine = processedData.ampereLineData.filter(
-        v => v.y != null && !Number.isNaN(v.y)
-    );
-    let max = filteredAmpereLine.length > 0 ? -Number.MAX_VALUE : 0;
+    multiProcessedData.forEach((processedData, index) => {
+        const avgTemp = processedData.averageLine.reduce(
+            (previousValue, currentValue) => ({
+                sum: previousValue.sum + currentValue.y,
+                count: previousValue.count + currentValue.count,
+            }),
+            {
+                sum: 0,
+                count: 0,
+            }
+        );
+        const average = avgTemp.sum / avgTemp.count / 1000;
+        averages.push(average);
 
-    filteredAmpereLine.forEach(v => {
-        if (v.y != null && v.y > max) {
-            max = v.y;
-        }
+        const filteredAmpereLine = processedData.ampereLineData.filter(
+            v => v.y != null && !Number.isNaN(v.y)
+        );
+        let max = filteredAmpereLine.length > 0 ? -Number.MAX_VALUE : 0;
+
+        filteredAmpereLine.forEach(v => {
+            if (v.y != null && v.y > max) {
+                max = v.y;
+            }
+        });
+
+        max /= 1000;
+        maxs.push(max);
+
+        ampereLineData[index] = {
+            name: `Device${index}`,
+            data: processedData.ampereLineData,
+            color: multiColors[index],
+        };
     });
 
-    max /= 1000;
-
     setData({
-        ampereLineData: processedData.ampereLineData,
-        bitsLineData: processedData.bitsLineData,
+        ampereLineData,
+        bitsLineData,
     });
 
     setWindowStats({
-        max,
-        average,
+        max: maxs,
+        average: averages,
         delta:
             DataManager().getTotalSavedRecords() > 0
                 ? Math.min(windowEnd, DataManager().getTimestamp()) -
@@ -419,13 +438,13 @@ const Chart = () => {
     }, [numberOfPixelsInWindow, windowDuration, sampleFreq]);
 
     const [data, setData] = useState<{
-        ampereLineData: AmpereState[];
+        ampereLineData: MultiAmpereState[];
         bitsLineData: DigitalChannelStates[];
     }>({ ampereLineData: [], bitsLineData: [] });
 
     const [windowStats, setWindowStats] = useState<{
-        average: number;
-        max: number;
+        average: number[];
+        max: number[];
         delta: number;
     } | null>(null);
 
@@ -567,6 +586,18 @@ const Chart = () => {
         windowDuration,
     ]);
 
+    const multiStats = range(0, windowStats?.average.length || 0).map(index => (
+        <WindowStatBox
+            key={index}
+            color={multiColors[index]}
+            average={
+                windowStats?.average[index] ? windowStats.average[index] : 0
+            }
+            max={windowStats?.max[index] ? windowStats.max[index] : 0}
+            delta={windowStats?.delta ? windowStats.delta : 0}
+        />
+    ));
+
     return (
         <div className="tw-relative tw-flex tw-h-full tw-w-full tw-flex-col tw-justify-between tw-gap-4 tw-text-gray-600">
             <div className="scroll-bar-white-bg tw-flex tw-h-full tw-flex-col tw-overflow-y-auto tw-overflow-x-hidden tw-bg-white tw-p-2">
@@ -609,13 +640,7 @@ const Chart = () => {
                         </div>
                     )}
                     <div className="tw-flex tw-flex-grow tw-flex-wrap tw-gap-2">
-                        <WindowStatBox
-                            average={
-                                windowStats?.average ? windowStats.average : 0
-                            }
-                            max={windowStats?.max ? windowStats.max : 0}
-                            delta={windowStats?.delta ? windowStats.delta : 0}
-                        />
+                        {multiStats}
                         <SelectionStatBox
                             resetCursor={resetCursor}
                             progress={selectionStatsProcessingProgress}
