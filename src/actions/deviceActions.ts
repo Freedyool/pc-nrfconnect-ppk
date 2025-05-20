@@ -78,9 +78,9 @@ import { convertTimeToSeconds } from '../utils/duration';
 import { isDiskFull } from '../utils/fileUtils';
 import {
     addDevice,
+    getAllDevice,
     getDevice,
     getDeviceCount,
-    getDeviceList,
     MultiDeviceItem,
     removeDevice,
     updateDevice,
@@ -100,7 +100,7 @@ let releaseFileWriteListener: (() => void) | undefined;
 export const setupOptions =
     (recordingMode: RecordingMode): AppThunk<RootState, Promise<void>> =>
     async (dispatch, getState) => {
-        if (!device) return;
+        if (getDeviceCount() === 0) return;
         try {
             await DataManager().reset();
             dispatch(resetChartTime());
@@ -117,7 +117,7 @@ export const setupOptions =
                     DataManager().initializeTriggerSession(60);
                     break;
                 case 'MultiDevice':
-                    getDeviceList().forEach((dev, index) => {
+                    getAllDevice().forEach((dev, index) => {
                         if (dev) {
                             DataManager().initializeLiveSession(
                                 getSessionRootFolder(getState()),
@@ -179,7 +179,7 @@ export const samplingStart =
                 DataManager().setSamplesPerSecond(100_000);
                 break;
         }
-        const res = getDeviceList().map(dev => dev?.ppkAverageStart());
+        const res = getAllDevice().map(dev => dev?.ppkAverageStart());
         await Promise.all(res);
         startPreventSleep();
     };
@@ -187,10 +187,10 @@ export const samplingStart =
 export const samplingStop =
     (): AppThunk<RootState, Promise<void>> => async dispatch => {
         latestTrigger = undefined;
-        if (!device) return;
+        if (getDeviceCount() === 0) return;
         dispatch(clearRecordingMode());
         dispatch(samplingStoppedAction());
-        const res = getDeviceList().map(dev => dev?.ppkAverageStop());
+        const res = getAllDevice().map(dev => dev?.ppkAverageStop());
         await Promise.all(res);
         stopPreventSleep();
         releaseFileWriteListener?.();

@@ -6,7 +6,7 @@
 
 // 用于替代 ppk2 硬件向上层注入采样数据的虚拟设备
 
-const dataMock = () => Buffer.alloc(9999, 'a');
+const dataMock = () => Buffer.alloc(10000, 'aaaa');
 
 const meta = [
     32, 82, 48, 58, 32, 49, 48, 48, 54, 46, 54, 52, 56, 57, 56, 54, 56, 49, 54,
@@ -89,7 +89,7 @@ process.on('message', msg => {
                     process.send(data.slice(), err => {
                         if (err) console.log(err);
                     });
-                }, 30);
+                }, 100);
                 break;
             case 7: // stop
                 clearInterval(handle);

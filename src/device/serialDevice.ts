@@ -310,6 +310,7 @@ class SerialDevice extends Device {
         );
         ofs = sampleSize - ofs;
         this.handleRawDataSet(first.readUIntLE(0, sampleSize));
+        // console.log(buf.length);
         for (; ofs <= buf.length - sampleSize; ofs += sampleSize) {
             this.handleRawDataSet(buf.readUIntLE(ofs, sampleSize));
         }

@@ -41,7 +41,11 @@ import {
     getFreeSpace,
     remainingTime as calcRemainingTime,
 } from '../../utils/fileUtils';
-import { isDataLoggerPane, isScopePane } from '../../utils/panes';
+import {
+    isDataLoggerPane,
+    isMultiDevicePane,
+    isScopePane,
+} from '../../utils/panes';
 import {
     getDoNotAskStartAndClear,
     setDoNotAskStartAndClear,
@@ -63,6 +67,7 @@ export default () => {
     const onWriteListener = useRef<() => void>();
     const scopePane = useSelector(isScopePane);
     const dataLoggerPane = useSelector(isDataLoggerPane);
+    const multiDevicePane = useSelector(isMultiDevicePane);
     const recordingMode = useSelector(getRecordingMode);
     const { samplingRunning } = useSelector(appState);
     const { duration, durationUnit } = useSelector(dataLoggerState);
@@ -78,6 +83,7 @@ export default () => {
         .replace('.0', '')}`;
 
     const startStopTitle = !samplingRunning ? startButtonTooltip : undefined;
+    const loggerPane = dataLoggerPane || multiDevicePane;
 
     const [showDialog, setShowDialog] = useState(false);
 
@@ -133,7 +139,7 @@ export default () => {
     const [freeSpace, setFreeSpace] = useState<number>(0);
 
     useEffect(() => {
-        if (!dataLoggerPane) return;
+        if (!loggerPane) return;
 
         const action = () => {
             getFreeSpace(diskFullTrigger, sessionFolder).then(space => {
@@ -145,7 +151,7 @@ export default () => {
         return () => {
             clearInterval(timerId);
         };
-    }, [dataLoggerPane, diskFullTrigger, sessionFolder]);
+    }, [loggerPane, diskFullTrigger, sessionFolder]);
 
     const [remainingTime, setRemainingTime] = useState<number>(0);
 
@@ -156,7 +162,7 @@ export default () => {
     return (
         <>
             <Group heading="Sampling parameters" gap={4}>
-                {dataLoggerPane && <LiveModeSettings />}
+                {loggerPane && <LiveModeSettings />}
                 {scopePane && <TriggerSettings />}
             </Group>
             <div className="tw-flex tw-flex-col tw-gap-2">
@@ -191,7 +197,7 @@ export default () => {
                     variant="secondary"
                     started={samplingRunning}
                 />
-                {dataLoggerPane && (
+                {loggerPane && (
                     <div className="tw-border tw-border-solid tw-border-gray-200 tw-p-2 tw-text-[10px] tw-text-gray-400">
                         {!sampleIndefinitely && (
                             <div>
