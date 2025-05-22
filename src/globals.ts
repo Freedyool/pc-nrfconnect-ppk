@@ -114,15 +114,11 @@ class FileData {
     }
 }
 
-const getTimestamp = () =>
-    !options.fileBuffer
+const getTimestamp = (chan = 0) =>
+    !options.fileBuffer[chan]
         ? 0
         : indexToTimestamp(
-              options.fileBuffer.reduce(
-                  (acc, buffer) =>
-                      Math.max(acc, buffer.getSessionInBytes() / frameSize - 1),
-                  0
-              )
+              options.fileBuffer[chan].getSessionInBytes() / frameSize - 1
           );
 
 export const normalizeTimeFloor = (time: number) =>

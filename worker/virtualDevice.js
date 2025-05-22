@@ -4,9 +4,48 @@
  * SPDX-License-Identifier: LicenseRef-Nordic-4-Clause
  */
 
+/* eslint-disable no-bitwise */
+
 // 用于替代 ppk2 硬件向上层注入采样数据的虚拟设备
 
-const dataMock = () => Buffer.alloc(10000, 'aaaa');
+const CBITS = (val, mask, pos) => (val & mask) << pos;
+
+const generateData = (a, r, c, l) =>
+    CBITS(a, 0x3fff, 0) |
+    CBITS(r, 0x7, 14) |
+    CBITS(c, 0x3f, 18) |
+    CBITS(l, 0xff, 24);
+
+let tmpIndex = 0;
+const sampRate = 100000;
+const sendIntv = 50; // 50ms send once
+
+let timeStamp = 0;
+
+const dataMock = () => {
+    const now = Date.now();
+    const trunks = Math.floor((sampRate * (now - timeStamp)) / 1000);
+    const dataSize = trunks * 4; // bytes
+
+    const data = Buffer.alloc(dataSize);
+
+    for (let i = 0; i < trunks; i += 1) {
+        const adc =
+            0x200 +
+            Math.round(0x1ff * Math.sin((2 * Math.PI * tmpIndex) / sampRate));
+        const range = 3;
+        const counter = tmpIndex & 0x3f;
+        const logic = tmpIndex % 2;
+
+        tmpIndex += 1;
+
+        data.writeUInt32LE(generateData(adc, range, counter, logic), i * 4);
+    }
+
+    timeStamp = now;
+
+    return data;
+};
 
 const meta = [
     32, 82, 48, 58, 32, 49, 48, 48, 54, 46, 54, 52, 56, 57, 56, 54, 56, 49, 54,
@@ -65,9 +104,9 @@ const meta = [
     48, 48, 48, 48, 10, 73, 65, 58, 32, 53, 56, 10, 69, 78, 68, 10,
 ];
 
-process.on('message', msg => {
-    let handle = null;
+let handle = null;
 
+process.on('message', msg => {
     if (msg.open) {
         console.log('\x1b[2J'); // ansi clear screen
         process.send({ opening: msg.open });
@@ -89,11 +128,14 @@ process.on('message', msg => {
                     process.send(data.slice(), err => {
                         if (err) console.log(err);
                     });
-                }, 100);
+                }, sendIntv);
+                timeStamp = Date.now();
+                tmpIndex = Math.random() * 10000; // random offset
                 break;
             case 7: // stop
                 clearInterval(handle);
                 handle = null;
+                tmpIndex = 0;
                 break;
             case 12: // power on
             case 13: // set power mode

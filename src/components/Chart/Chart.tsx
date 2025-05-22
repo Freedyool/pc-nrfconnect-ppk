@@ -151,6 +151,17 @@ const updateChart = async (
             ? digitalChannelsToDisplay
             : [];
 
+    let loadingCount = 0;
+    const onLoading = (loading: boolean) => {
+        console.log('onLoading', loading);
+        loadingCount += loading ? 1 : -1;
+        if (loadingCount === 0) {
+            setProcessing(false);
+        } else {
+            setProcessing(true);
+        }
+    };
+
     const multiProcessedData = await dataProcessor.process(
         windowBegin,
         windowEnd,
@@ -159,7 +170,7 @@ const updateChart = async (
             : (digitalChannelsToCompute as number[]),
         Math.min(indexToTimestamp(windowDuration), numberOfPixelsInWindow),
         windowDuration,
-        setProcessing
+        onLoading
     );
 
     const averages: number[] = [];

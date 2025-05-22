@@ -473,6 +473,7 @@ export const open =
                     now - lastRenderRequestTime >= 1000) // force 1 FPS
             ) {
                 const timestamp = now;
+                // console.log(`${renderIndex}: ${now - lastRenderRequestTime}ms`);
                 lastRenderRequestTime = now;
                 if (getState().app.chart.liveMode) {
                     requestAnimationFrame(() => {

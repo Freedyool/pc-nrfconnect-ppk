@@ -300,8 +300,10 @@ class SerialDevice extends Device {
     }
 
     remainder = Buffer.alloc(0);
+    timeStamp = Date.now();
 
     parseMeasurementData(buf: Buffer) {
+        const timeStamp = Date.now();
         const sampleSize = 4;
         let ofs = this.remainder.length;
         const first = Buffer.concat(
@@ -314,6 +316,8 @@ class SerialDevice extends Device {
         for (; ofs <= buf.length - sampleSize; ofs += sampleSize) {
             this.handleRawDataSet(buf.readUIntLE(ofs, sampleSize));
         }
+        // console.log(`[${timeStamp - this.timeStamp}] Trunk size: ${buf.length} Bytes, which costs ${Date.now() - timeStamp}ms to handle.`);
+        this.timeStamp = timeStamp;
         this.remainder = buf.subarray(ofs);
     }
 
