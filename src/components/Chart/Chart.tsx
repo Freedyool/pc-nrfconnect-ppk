@@ -58,8 +58,9 @@ import {
 import { getProgress } from '../../slices/triggerSlice';
 import { isDataLoggerPane } from '../../utils/panes';
 import { type booleanTupleOf8 } from '../../utils/persistentStore';
-import type { AmpereChartJS } from './AmpereChart';
-import AmpereChart from './AmpereChart';
+import BarChart from './AmpereChart/BarChart';
+import type { AmpereChartJS } from './AmpereChart/LineChart';
+import LineChart from './AmpereChart/LineChart';
 import ChartTop from './ChartTop';
 import dataAccumulatorInitialiser, { calcStats } from './data/dataAccumulator';
 import { DigitalChannelStates, MultiAmpereState } from './data/dataTypes';
@@ -622,22 +623,28 @@ const Chart = () => {
                     windowDuration={windowDuration}
                 />
                 <TimeSpanTop width={chartAreaWidth + 1} />
-                <AmpereChart
-                    processing={processing || waitingForTrigger}
-                    processingMessage={
-                        waitingForTrigger
-                            ? triggerProgress.progressMessage ??
-                              'Waiting for trigger'
-                            : undefined
-                    }
-                    processingPercent={triggerProgress.progress}
-                    setNumberOfPixelsInWindow={setNumberOfPixelsInWindow}
-                    setChartAreaWidth={setChartAreaWidth}
-                    numberOfSamplesPerPixel={samplesPerPixel}
-                    chartRef={chartRef}
-                    cursorData={cursorData}
-                    lineData={data.ampereLineData}
-                />
+                <div className="tw-relative tw-flex tw-h-full tw-flex-row">
+                    <LineChart
+                        processing={processing || waitingForTrigger}
+                        processingMessage={
+                            waitingForTrigger
+                                ? triggerProgress.progressMessage ??
+                                  'Waiting for trigger'
+                                : undefined
+                        }
+                        processingPercent={triggerProgress.progress}
+                        setNumberOfPixelsInWindow={setNumberOfPixelsInWindow}
+                        setChartAreaWidth={setChartAreaWidth}
+                        numberOfSamplesPerPixel={samplesPerPixel}
+                        chartRef={chartRef}
+                        cursorData={cursorData}
+                        lineData={data.ampereLineData}
+                    />
+                    <BarChart
+                        barData={data.ampereLineData}
+                        cursorData={cursorData}
+                    />
+                </div>
                 <TimeSpanBottom
                     cursorBegin={cursorBegin}
                     cursorEnd={cursorEnd}

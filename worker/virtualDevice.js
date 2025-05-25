@@ -21,7 +21,7 @@ const sampRate = 100_000; // Hz
 const sendIntv = 30; // ms
 
 let timeStamp = 0;
-const dataType = 1; // 0: raw, 1: processed
+const dataType = 0; // 0: raw, 1: processed
 
 const dataMockRaw = () => {
     const now = Date.now();

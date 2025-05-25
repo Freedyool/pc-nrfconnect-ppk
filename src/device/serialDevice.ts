@@ -316,7 +316,11 @@ class SerialDevice extends Device {
         for (; ofs <= buf.length - sampleSize; ofs += sampleSize) {
             this.handleRawDataSet(buf.readUIntLE(ofs, sampleSize));
         }
-        // console.log(`[${timeStamp - this.timeStamp}] Trunk size: ${buf.length} Bytes, which costs ${Date.now() - timeStamp}ms to handle.`);
+        // console.log(
+        //     `[${timeStamp - this.timeStamp}] Trunk size: ${
+        //         buf.length
+        //     } Bytes, which costs ${Date.now() - timeStamp}ms to handle.`
+        // );
         this.timeStamp = timeStamp;
         this.remainder = buf.subarray(ofs);
     }
@@ -329,11 +333,11 @@ class SerialDevice extends Device {
             const bits = buf.readUint16LE(i * sampleSize + 8);
             this.onSampleCallback({ value, bits }, this.channel);
         }
-        console.log(
-            `[${timeStamp - this.timeStamp}] Trunk size: ${
-                buf.length
-            } Bytes, which costs ${Date.now() - timeStamp}ms to handle.`
-        );
+        // console.log(
+        //     `[${timeStamp - this.timeStamp}] Trunk size: ${
+        //         buf.length
+        //     } Bytes, which costs ${Date.now() - timeStamp}ms to handle.`
+        // );
         this.timeStamp = timeStamp;
     }
 
@@ -345,8 +349,8 @@ class SerialDevice extends Device {
                     metadata = `${metadata}${data}`;
                     if (metadata.includes('END')) {
                         // hopefully we have the complete string, HW is the last line
-                        // this.parser = this.parseMeasurementData.bind(this);
-                        this.parser = this.parseProcessedData.bind(this);
+                        this.parser = this.parseMeasurementData.bind(this);
+                        // this.parser = this.parseProcessedData.bind(this);
                         resolve(metadata);
                     }
                 };

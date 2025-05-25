@@ -19,8 +19,8 @@ import {
 import { Chart, ChartConfiguration, ChartData, ChartOptions } from 'chart.js';
 import { unit } from 'mathjs';
 
-import { DataManager } from '../../globals';
-import { isFileLoaded, isSamplingRunning } from '../../slices/appSlice';
+import { DataManager } from '../../../globals';
+import { isFileLoaded, isSamplingRunning } from '../../../slices/appSlice';
 import {
     getChartYAxisRange,
     getCursorRange,
@@ -28,20 +28,20 @@ import {
     isLiveMode,
     isTimestampsVisible,
     showSystemTime,
-} from '../../slices/chartSlice';
+} from '../../../slices/chartSlice';
 import {
     getTriggerOrigin,
     getTriggerValue,
     setTriggerLevel,
-} from '../../slices/triggerSlice';
-import { isScopePane } from '../../utils/panes';
-import { type CursorData } from './Chart';
-import { AmpereState, MultiAmpereState } from './data/dataTypes';
-import crossHairPlugin from './plugins/chart.crossHair';
-import dragSelectPlugin, { DragSelect } from './plugins/chart.dragSelect';
-import triggerLevelPlugin from './plugins/chart.triggerLevel';
-import triggerOriginPlugin from './plugins/chart.triggerOrigin';
-import zoomPanPlugin, { ZoomPan } from './plugins/chart.zoomPan';
+} from '../../../slices/triggerSlice';
+import { isScopePane } from '../../../utils/panes';
+import { type CursorData } from '../Chart';
+import { AmpereState, MultiAmpereState } from '../data/dataTypes';
+import crossHairPlugin from '../plugins/chart.crossHair';
+import dragSelectPlugin, { DragSelect } from '../plugins/chart.dragSelect';
+import triggerLevelPlugin from '../plugins/chart.triggerLevel';
+import triggerOriginPlugin from '../plugins/chart.triggerOrigin';
+import zoomPanPlugin, { ZoomPan } from '../plugins/chart.zoomPan';
 
 const yAxisWidth = 64;
 const rightMargin = 32;
@@ -99,7 +99,7 @@ const formatCurrent = (nA: number) =>
 
 const padL = (nr: number, len = 2, chr = `0`) => `${nr}`.padStart(len, chr);
 
-const timestampToLabel = (usecs: number, systemTime?: number) => {
+export const timestampToLabel = (usecs: number, systemTime?: number) => {
     const microseconds = Math.abs(usecs);
 
     if (systemTime != null) {

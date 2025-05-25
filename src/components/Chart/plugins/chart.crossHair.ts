@@ -7,7 +7,7 @@
 import { colors } from '@nordicsemiconductor/pc-nrfconnect-shared';
 import { Plugin } from 'chart.js';
 
-import type { AmpereChartJS } from '../AmpereChart';
+import type { AmpereChartJS } from '../AmpereChart/LineChart';
 
 const { gray700: color, white } = colors;
 

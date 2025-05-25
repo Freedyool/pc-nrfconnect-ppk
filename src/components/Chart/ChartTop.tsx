@@ -24,7 +24,7 @@ import {
 } from '../../slices/chartSlice';
 import { dataLoggerState } from '../../slices/dataLoggerSlice';
 import { isDataLoggerPane } from '../../utils/panes';
-import { AmpereChartJS } from './AmpereChart';
+import { AmpereChartJS } from './AmpereChart/LineChart';
 import ChartOptions from './ChartOptions';
 
 type TimeWindowButton = {

@@ -12,7 +12,7 @@ import {
     MAX_WINDOW_DURATION,
     MIN_WINDOW_DURATION,
 } from '../../../slices/chartSlice';
-import type { AmpereChartJS } from '../AmpereChart';
+import type { AmpereChartJS } from '../AmpereChart/LineChart';
 import { isCanvasElement } from './utility';
 
 type ZoomPanCallback = (
