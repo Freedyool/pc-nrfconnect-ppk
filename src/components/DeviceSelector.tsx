@@ -65,7 +65,7 @@ export default () => {
 
     useEffect(() => {
         if (multiDevicePanel) {
-            dispatch(setDeviceSelectorList(['DEVICE1', 'DEVICE2']));
+            dispatch(setDeviceSelectorList(['DEVICE1', 'DEVICE2', 'DEVICE3']));
         } else {
             dispatch(setDeviceSelectorList(['SELECT DEVICE']));
         }
@@ -100,7 +100,7 @@ export default () => {
                 dispatch(reduceDeviceCount());
                 dispatch(close(sel));
             }}
-            virtualDevices={['ADV-PPK1', 'ADV-PPK2']}
+            virtualDevices={['ADV-PPK1', 'ADV-PPK2', 'ADV-PPK3']}
             onVirtualDeviceSelected={(sel, device) => {
                 logger.info(`${sel} ${device} selected`);
                 const virtualDevice: Device = {

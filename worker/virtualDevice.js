@@ -17,14 +17,16 @@ const generateData = (a, r, c, l) =>
     CBITS(l, 0xff, 24);
 
 let tmpIndex = 0;
-const sampRate = 100000;
-const sendIntv = 50; // 50ms send once
+const sampRate = 100_000; // Hz
+const sendIntv = 30; // ms
 
 let timeStamp = 0;
+const dataType = 1; // 0: raw, 1: processed
 
-const dataMock = () => {
+const dataMockRaw = () => {
     const now = Date.now();
-    const trunks = Math.floor((sampRate * (now - timeStamp)) / 1000);
+    // How many Samples to send
+    const trunks = Math.floor(sampRate * ((now - timeStamp) / 1000));
     const dataSize = trunks * 4; // bytes
 
     const data = Buffer.alloc(dataSize);
@@ -40,6 +42,30 @@ const dataMock = () => {
         tmpIndex += 1;
 
         data.writeUInt32LE(generateData(adc, range, counter, logic), i * 4);
+    }
+
+    timeStamp = now;
+
+    return data;
+};
+
+const dataMockProcessed = () => {
+    const now = Date.now();
+    const trunks = Math.floor(sampRate * ((now - timeStamp) / 1000));
+    const dataSize = trunks * 10; // 8bytes double + 2bytes uint16
+
+    const data = Buffer.alloc(dataSize);
+
+    for (let i = 0; i < trunks; i += 1) {
+        const adc = Math.round(
+            (1 + Math.sin((2 * Math.PI * tmpIndex) / sampRate)) * 1e6
+        );
+        const logic = 0x1;
+
+        tmpIndex += 1;
+
+        data.writeDoubleLE(adc, i * 10);
+        data.writeUInt16LE(logic, i * 10 + 8);
     }
 
     timeStamp = now;
@@ -124,13 +150,14 @@ process.on('message', msg => {
                     clearInterval(handle);
                 }
                 handle = setInterval(() => {
-                    const data = dataMock();
+                    const data =
+                        dataType === 0 ? dataMockRaw() : dataMockProcessed();
                     process.send(data.slice(), err => {
                         if (err) console.log(err);
                     });
                 }, sendIntv);
                 timeStamp = Date.now();
-                tmpIndex = Math.random() * 10000; // random offset
+                tmpIndex = Math.random() * sampRate; // random offset
                 break;
             case 7: // stop
                 clearInterval(handle);

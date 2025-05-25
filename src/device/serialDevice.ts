@@ -321,6 +321,22 @@ class SerialDevice extends Device {
         this.remainder = buf.subarray(ofs);
     }
 
+    parseProcessedData(buf: Buffer) {
+        const timeStamp = Date.now();
+        const sampleSize = 10;
+        for (let i = 0; i < buf.length / 10; i += 1) {
+            const value = buf.readDoubleLE(i * sampleSize);
+            const bits = buf.readUint16LE(i * sampleSize + 8);
+            this.onSampleCallback({ value, bits }, this.channel);
+        }
+        console.log(
+            `[${timeStamp - this.timeStamp}] Trunk size: ${
+                buf.length
+            } Bytes, which costs ${Date.now() - timeStamp}ms to handle.`
+        );
+        this.timeStamp = timeStamp;
+    }
+
     getMetadata() {
         let metadata = '';
         return (
@@ -329,7 +345,8 @@ class SerialDevice extends Device {
                     metadata = `${metadata}${data}`;
                     if (metadata.includes('END')) {
                         // hopefully we have the complete string, HW is the last line
-                        this.parser = this.parseMeasurementData.bind(this);
+                        // this.parser = this.parseMeasurementData.bind(this);
+                        this.parser = this.parseProcessedData.bind(this);
                         resolve(metadata);
                     }
                 };

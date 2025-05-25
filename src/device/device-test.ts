@@ -176,7 +176,7 @@ class SerialDevice extends EventEmitter {
                     metadata = `${metadata}${data}`;
                     if (metadata.includes('END')) {
                         // hopefully we have the complete string, HW is the last line
-                        this.parser = this.parseMeasurementData.bind(this);
+                        this.parser = this.parseProcessedData.bind(this);
                         resolve(metadata);
                     }
                 };
@@ -348,6 +348,24 @@ class SerialDevice extends EventEmitter {
     remainder = Buffer.alloc(0);
     timeStamp = Date.now();
 
+    parseProcessedData(buf: Buffer) {
+        const timeStamp = Date.now();
+        console.log(buf);
+        const sampleSize = 10;
+        for (let i = 0; i < buf.length / sampleSize; i += 1) {
+            const value = buf.readDoubleLE(i * sampleSize);
+            const bits = buf.readUint16LE(i * sampleSize + 8);
+            // console.log(`value: ${value}, bits: ${bits}`);
+            this.onSampleCallback({ value, bits }, this.channel);
+        }
+        console.log(
+            `[${timeStamp - this.timeStamp}] Trunk size: ${
+                buf.length
+            } Bytes, which costs ${Date.now() - timeStamp}ms to handle.`
+        );
+        this.timeStamp = timeStamp;
+    }
+
     parseMeasurementData(buf: Buffer) {
         const timeStamp = Date.now();
         const sampleSize = 4;
@@ -441,6 +459,7 @@ const onSample = ({ value, bits }: SampleValues, chan: number) => {
 
     sampleCount += 1;
 
+    // if (sampleCount < 10) {
     if (sampleCount < 100_000 * 10) {
         // 使用 utf8 编码写入数据
         writerStream.write(tempBuffer, 'binary');
