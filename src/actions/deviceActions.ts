@@ -309,7 +309,7 @@ export const open =
                     cappedValue >= getState().app.trigger.level;
                 prevCappedValue = cappedValue;
 
-                if (!DataManager().isInSync()) {
+                if (!DataManager().isInSync(chan)) {
                     return;
                 }
 
@@ -365,7 +365,7 @@ export const open =
                     getState().app.dataLogger.duration,
                     getState().app.dataLogger.durationUnit
                 ) * microSecondsPerSecond;
-            if (durationInMicroSeconds <= DataManager().getTimestamp()) {
+            if (durationInMicroSeconds <= DataManager().getTimestamp(chan)) {
                 if (samplingRunning) {
                     dispatch(samplingStop());
                 }

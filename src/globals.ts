@@ -21,6 +21,7 @@ export const numberOfDigitalChannels = 8;
 const initialSamplingTime = 10;
 const initialSamplesPerSecond = 1e6 / initialSamplingTime;
 export const microSecondsPerSecond = 1e6;
+export const microSecondsPerMilliSecond = 1e3;
 
 const tempBuffers: Uint8Array[] = [];
 const tempViews: DataView[] = [];
@@ -114,12 +115,32 @@ class FileData {
     }
 }
 
-const getTimestamp = (chan = 0) =>
-    !options.fileBuffer[chan]
+const getTimestamp = (chan?: number) => {
+    if (chan === undefined || chan < 0 || chan >= options.fileBuffer.length) {
+        let min = Number.MAX_VALUE;
+        options.fileBuffer.forEach(buffer => {
+            min = Math.min(
+                min,
+                indexToTimestamp(buffer.getSessionInBytes() / frameSize - 1)
+            );
+        });
+        return min !== Number.MAX_VALUE ? min : 0;
+    }
+    return !options.fileBuffer[chan]
         ? 0
         : indexToTimestamp(
               options.fileBuffer[chan].getSessionInBytes() / frameSize - 1
           );
+};
+
+const getStartSystemTime = () => {
+    const min = options.fileBuffer.reduce(
+        (acc, buffer) =>
+            Math.min(acc, buffer.getFirstWriteTime() ?? Number.MAX_VALUE),
+        Number.MAX_VALUE
+    );
+    return min !== Number.MAX_VALUE ? min : 0;
+};
 
 export const normalizeTimeFloor = (time: number) =>
     indexToTimestamp(timestampToIndex(time));
@@ -135,10 +156,12 @@ export const DataManager = () => ({
     },
     getSessionFolder: (chan = 0) =>
         options.fileBuffer[chan]?.getSessionFolder(),
+
+    getStartSystemTime,
     getData: async (
         buffer: Buffer,
         fromTime = 0,
-        toTime = getTimestamp(),
+        toTime = getTimestamp(0),
         bias: 'start' | 'end' | undefined = undefined,
         chan = 0,
         onLoading: (loading: boolean) => void = () => {}
@@ -155,12 +178,52 @@ export const DataManager = () => ({
 
         const numberOfElements =
             timestampToIndex(toTime) - timestampToIndex(fromTime) + 1;
-        const byteOffset = timestampToIndex(fromTime) * frameSize;
         const numberOfBytesToRead = numberOfElements * frameSize;
 
         if (buffer.length < numberOfBytesToRead) {
             throw new Error('Buffer is too small');
         }
+
+        const timeOffset =
+            (options.fileBuffer[chan].getFirstWriteTime() ?? 0) -
+            getStartSystemTime(); // ms
+
+        if (fromTime < timeOffset * microSecondsPerMilliSecond) {
+            console.log(
+                `chan ${chan} offset ${timeOffset}ms = ${options.fileBuffer[
+                    chan
+                ].getFirstWriteTime()} - ${getStartSystemTime()}`
+            );
+            const offset =
+                (((timeOffset * microSecondsPerMilliSecond - fromTime) *
+                    getSamplesPerSecond()) /
+                    microSecondsPerSecond) *
+                frameSize;
+            const dummy = Buffer.alloc(offset);
+            const readBytes = await options.fileBuffer[chan].read(
+                buffer,
+                0,
+                numberOfBytesToRead - offset,
+                bias,
+                onLoading
+            );
+            if (readBytes !== numberOfBytesToRead - offset) {
+                console.log(
+                    `missing ${
+                        (numberOfBytesToRead - readBytes) / frameSize
+                    } records`
+                );
+            }
+            return new FileData(
+                Buffer.concat([dummy, buffer]),
+                numberOfBytesToRead
+            );
+        }
+
+        const byteOffset =
+            timestampToIndex(
+                fromTime - timeOffset * microSecondsPerMilliSecond
+            ) * frameSize;
 
         const readBytes = await options.fileBuffer[chan].read(
             buffer,
@@ -177,55 +240,8 @@ export const DataManager = () => ({
                 } records`
             );
         }
+
         return new FileData(buffer, readBytes);
-    },
-    getAllData: (
-        buffers: Buffer[],
-        fromTime = 0,
-        toTime = getTimestamp(),
-        bias: 'start' | 'end' | undefined = undefined,
-        onLoading: (loading: boolean) => void = () => {}
-    ) => {
-        if (buffers.length !== options.fileBuffer.length) {
-            throw new Error(
-                `Buffers length ${buffers.length} does not match fileBuffer length ${options.fileBuffer.length}`
-            );
-        }
-        return options.fileBuffer.map(async (buffer, index) => {
-            if (buffer === undefined) {
-                return new FileData(Buffer.alloc(0), 0);
-            }
-
-            if (buffer.getSessionInBytes() === 0) {
-                return new FileData(Buffer.alloc(0), 0);
-            }
-
-            const numberOfElements =
-                timestampToIndex(toTime) - timestampToIndex(fromTime) + 1;
-            const byteOffset = timestampToIndex(fromTime) * frameSize;
-            const numberOfBytesToRead = numberOfElements * frameSize;
-
-            if (buffers[index].length < numberOfBytesToRead) {
-                throw new Error('Buffer is too small');
-            }
-
-            const readBytes = await buffer.read(
-                buffers[index],
-                byteOffset,
-                numberOfBytesToRead,
-                bias,
-                onLoading
-            );
-
-            if (readBytes !== numberOfBytesToRead) {
-                console.log(
-                    `missing ${
-                        (numberOfBytesToRead - readBytes) / frameSize
-                    } records`
-                );
-            }
-            return new FileData(buffers[index], readBytes);
-        });
     },
 
     getTimestamp,
@@ -268,8 +284,6 @@ export const DataManager = () => ({
 
         return inSync;
     },
-    getStartSystemTime: (chan = 0) =>
-        options.fileBuffer[chan]?.getFirstWriteTime(),
 
     addData: (current: number, bits: number, chan = 0) => {
         if (
@@ -290,7 +304,7 @@ export const DataManager = () => ({
             options.writeBuffer[chan].append(tempBuffers[chan]);
         } else {
             options.fileBuffer[chan]?.append(tempBuffers[chan]);
-            options.foldingBuffer[chan]?.addData(current, getTimestamp());
+            options.foldingBuffer[chan]?.addData(current, getTimestamp(chan));
         }
 
         const writeBuffer = options.writeBuffer[chan];

@@ -40,7 +40,10 @@ export const calcStats = (
     }
 
     begin = Math.max(normalizeTimeCeil(begin), 0);
-    end = Math.min(normalizeTimeFloor(end), DataManager().getTimestamp());
+    end = Math.min(
+        normalizeTimeFloor(end),
+        DataManager().getTimestamp(channel)
+    );
 
     const maxNumberOfSamplesToProcess = 10_000_000;
     const buffer = Buffer.alloc(maxNumberOfSamplesToProcess * frameSize);
@@ -164,12 +167,15 @@ const accumulate = async (
         }
     }
 
-    const dataPromise = DataManager().getAllData(
-        globalReadBuffers,
-        begin,
-        end,
-        bias,
-        onLoading
+    const dataPromise = [...Array(channelCount).keys()].map(i =>
+        DataManager().getData(
+            globalReadBuffers[i],
+            begin,
+            end,
+            bias,
+            i,
+            onLoading
+        )
     );
 
     const needMinMaxLine = numberOfPointsPerGrouped !== 1;
