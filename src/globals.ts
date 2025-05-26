@@ -140,8 +140,8 @@ export const DataManager = () => ({
         fromTime = 0,
         toTime = getTimestamp(),
         bias: 'start' | 'end' | undefined = undefined,
-        onLoading: (loading: boolean) => void = () => {},
-        chan = 0
+        chan = 0,
+        onLoading: (loading: boolean) => void = () => {}
     ) => {
         // NOTE: only one getData per buffer should bhe executed at any given time
 
@@ -395,7 +395,8 @@ export const DataManager = () => ({
         return { fileBuffer, foldingBuffer };
     },
 
-    getTotalSavedRecords: () => timestampToIndex(getTimestamp()) + 1,
+    getTotalSavedRecords: (chan = 0) =>
+        timestampToIndex(getTimestamp(chan)) + 1,
 
     loadData: (sessionPath: string, startSystemTime?: number, chan = 0) => {
         options.fileBuffer[chan] = new FileBuffer(

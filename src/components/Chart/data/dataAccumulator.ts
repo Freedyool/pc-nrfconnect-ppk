@@ -30,7 +30,8 @@ export const calcStats = (
     begin: number,
     end: number,
     abortController?: AbortController,
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void,
+    channel?: number
 ) => {
     if (begin > end) {
         const temp = begin;
@@ -54,7 +55,7 @@ export const calcStats = (
         new Promise<{ begin: number; end: number }>(res => {
             setTimeout(() => {
                 DataManager()
-                    .getData(buffer, b, e, 'end')
+                    .getData(buffer, b, e, 'end', channel)
                     .then(data => {
                         onProgress?.((b / (end - begin)) * 100);
                         for (let n = 0; n < data.getLength(); n += 1) {

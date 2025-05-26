@@ -26,7 +26,6 @@ import {
     PointElement,
     Title,
 } from 'chart.js';
-import { range } from 'lodash';
 
 import Minimap from '../../features/minimap/Minimap';
 import {
@@ -56,19 +55,19 @@ import {
     setLiveMode,
 } from '../../slices/chartSlice';
 import { getProgress } from '../../slices/triggerSlice';
+import { getAllDeviceName } from '../../utils/multiDevice';
 import { isDataLoggerPane } from '../../utils/panes';
 import { type booleanTupleOf8 } from '../../utils/persistentStore';
 import BarChart from './AmpereChart/BarChart';
 import type { AmpereChartJS } from './AmpereChart/LineChart';
 import LineChart from './AmpereChart/LineChart';
 import ChartTop from './ChartTop';
-import dataAccumulatorInitialiser, { calcStats } from './data/dataAccumulator';
+import dataAccumulatorInitialiser from './data/dataAccumulator';
 import { DigitalChannelStates, MultiAmpereState } from './data/dataTypes';
 import DigitalChannels from './DigitalChannels';
-import SelectionStatBox from './SelectionStatBox';
+import StatBox, { statAbortController } from './StatBox';
 import TimeSpanBottom from './TimeSpan/TimeSpanBottom';
 import TimeSpanTop from './TimeSpan/TimeSpanTop';
-import WindowStatBox from './WindowStatBox';
 
 // chart.js way of doing tree-shaking, meaning that components that will be included in the bundle
 // must be imported and registered. The registered components are used in both AmpChart and DigitalChannels.
@@ -126,7 +125,7 @@ const updateChart = async (
         state: {
             average: number[];
             max: number[];
-            delta: number;
+            delta: number[];
         } | null
     ) => void
 ) => {
@@ -176,6 +175,7 @@ const updateChart = async (
 
     const averages: number[] = [];
     const maxs: number[] = [];
+    const deltas: number[] = [];
     const ampereLineData: MultiAmpereState[] = [];
     const bitsLineData: DigitalChannelStates[] = [];
 
@@ -191,7 +191,7 @@ const updateChart = async (
             }
         );
         const average = avgTemp.sum / avgTemp.count / 1000;
-        averages.push(average);
+        averages[index] = average;
 
         const filteredAmpereLine = processedData.ampereLineData.filter(
             v => v.y != null && !Number.isNaN(v.y)
@@ -205,13 +205,20 @@ const updateChart = async (
         });
 
         max /= 1000;
-        maxs.push(max);
+        maxs[index] = max;
 
         ampereLineData[index] = {
             name: `Device${index}`,
             data: processedData.ampereLineData,
             color: multiColors[index],
         };
+
+        deltas[index] =
+            DataManager().getTotalSavedRecords(index) > 0
+                ? Math.min(windowEnd, DataManager().getTimestamp(index)) -
+                  windowBegin +
+                  indexToTimestamp(1)
+                : 0;
     });
 
     setData({
@@ -222,12 +229,7 @@ const updateChart = async (
     setWindowStats({
         max: maxs,
         average: averages,
-        delta:
-            DataManager().getTotalSavedRecords() > 0
-                ? Math.min(windowEnd, DataManager().getTimestamp()) -
-                  windowBegin +
-                  indexToTimestamp(1)
-                : 0,
+        delta: deltas,
     });
 };
 const Chart = () => {
@@ -362,8 +364,11 @@ const Chart = () => {
     const [numberOfPixelsInWindow, setNumberOfPixelsInWindow] = useState(0);
     const [chartAreaWidth, setChartAreaWidth] = useState(0);
 
+    // 创建 Ref 指向子组件的 Abort 方法
+    const selectionStatsAbortController = useRef<statAbortController>(null);
+
     const resetCursor = useCallback(() => {
-        selectionStateAbortController.current?.abort();
+        selectionStatsAbortController.current?.abort();
         chartCursor(null, null);
     }, [chartCursor]);
 
@@ -457,54 +462,8 @@ const Chart = () => {
     const [windowStats, setWindowStats] = useState<{
         average: number[];
         max: number[];
-        delta: number;
+        delta: number[];
     } | null>(null);
-
-    const [selectionStats, setSelectionStats] = useState<{
-        average: number;
-        max: number;
-        delta: number;
-    } | null>(null);
-
-    const [selectionStatsProcessing, setSelectionStatsProcessing] =
-        useState(false);
-    const [
-        selectionStatsProcessingProgress,
-        setSelectionStatsProcessingProgress,
-    ] = useState(0);
-    const selectionStateAbortController = useRef<AbortController>();
-
-    useEffect(() => {
-        if (cursorBegin != null && cursorEnd != null) {
-            selectionStateAbortController.current?.abort();
-            setSelectionStatsProcessing(true);
-            selectionStateAbortController.current = new AbortController();
-            setSelectionStatsProcessingProgress(0);
-            selectionStateAbortController.current.signal.addEventListener(
-                'abort',
-                () => setSelectionStatsProcessing(false)
-            );
-            const debounce = setTimeout(
-                () =>
-                    calcStats(
-                        (average, max, delta) => {
-                            setSelectionStats({ average, max, delta });
-                            setSelectionStatsProcessing(false);
-                        },
-                        cursorBegin,
-                        cursorEnd,
-                        selectionStateAbortController.current,
-                        setSelectionStatsProcessingProgress
-                    ),
-                300
-            );
-            return () => {
-                clearTimeout(debounce);
-            };
-        }
-
-        setSelectionStats(null);
-    }, [cursorBegin, cursorEnd, rerenderTrigger]);
 
     const [processing, setProcessing] = useState(false);
 
@@ -598,16 +557,21 @@ const Chart = () => {
         windowDuration,
     ]);
 
-    const multiStats = range(0, windowStats?.average.length || 0).map(index => (
-        <WindowStatBox
-            key={index}
-            color={multiColors[index]}
-            average={
-                windowStats?.average[index] ? windowStats.average[index] : 0
-            }
-            max={windowStats?.max[index] ? windowStats.max[index] : 0}
-            delta={windowStats?.delta ? windowStats.delta : 0}
-        />
+    const multiStats = getAllDeviceName().map((v, i) => (
+        <div className="tw-flex tw-flex-grow tw-flex-wrap tw-gap-2" key={v}>
+            <StatBox
+                cursorBegin={cursorBegin}
+                cursorEnd={cursorEnd}
+                average={windowStats?.average[i]}
+                max={windowStats?.max[i]}
+                delta={windowStats?.delta[i]}
+                color={multiColors[i]}
+                channel={i}
+                rerenderTrigger={rerenderTrigger}
+                resetCursor={resetCursor}
+                chartWindow={chartWindow}
+            />
+        </div>
     ));
 
     return (
@@ -657,16 +621,9 @@ const Chart = () => {
                             <Minimap />
                         </div>
                     )}
-                    <div className="tw-flex tw-flex-grow tw-flex-wrap tw-gap-2">
-                        {multiStats}
-                        <SelectionStatBox
-                            resetCursor={resetCursor}
-                            progress={selectionStatsProcessingProgress}
-                            processing={selectionStatsProcessing}
-                            chartWindow={chartWindow}
-                            {...selectionStats}
-                        />
-                    </div>
+                    {/* <div className="tw-flex tw-flex-grow tw-flex-wrap tw-gap-2"> */}
+                    {multiStats}
+                    {/* </div> */}
                 </div>
             </div>
             {digitalChannelsVisible && (

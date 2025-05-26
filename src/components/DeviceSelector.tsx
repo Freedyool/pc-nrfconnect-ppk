@@ -65,7 +65,7 @@ export default () => {
 
     useEffect(() => {
         if (multiDevicePanel) {
-            dispatch(setDeviceSelectorList(['DEVICE1', 'DEVICE2', 'DEVICE3']));
+            dispatch(setDeviceSelectorList(['DEV1', 'DEV2', 'DEV3']));
         } else {
             dispatch(setDeviceSelectorList(['SELECT DEVICE']));
         }
@@ -106,7 +106,7 @@ export default () => {
                 const virtualDevice: Device = {
                     id: 0,
                     traits: {},
-                    serialNumber: 'Virtual Device',
+                    serialNumber: device,
                 };
                 dispatch(addDeviceCount());
                 dispatch(open(sel, virtualDevice));
