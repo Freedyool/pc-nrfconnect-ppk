@@ -1,3 +1,16 @@
+diff --git a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/nrfutil/sandbox.ts b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/nrfutil/sandbox.ts
+index 9b0d339..1731d7e 100644
+--- a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/nrfutil/sandbox.ts
++++ b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/nrfutil/sandbox.ts
+@@ -780,7 +780,7 @@ export default async (
+         await sandbox.prepareSandbox(onProgress);
+     } else {
+         // update nrfutil core
+-        await sandbox.updateNrfUtilCore(onProgress);
++        // await sandbox.updateNrfUtilCore(onProgress);
+     }
+ 
+     onProgress?.(convertNrfutilProgress({ progressPercentage: 100 }));
 diff --git a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/DeviceSelector.tsx b/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/DeviceSelector.tsx
 index 21c22c1..417b1e7 100644
 --- a/node_modules/@nordicsemiconductor/pc-nrfconnect-shared/src/Device/DeviceSelector/DeviceSelector.tsx
