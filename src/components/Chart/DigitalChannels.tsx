@@ -7,18 +7,20 @@
 import React from 'react';
 import { Line } from 'react-chartjs-2';
 import { useSelector } from 'react-redux';
-import { colors } from '@nordicsemiconductor/pc-nrfconnect-shared';
 import { ChartOptions, LineControllerDatasetOptions } from 'chart.js';
 
+import { getCurrentChannel } from '../../actions/deviceActions';
 import { getWindowDuration } from '../../slices/chartSlice';
 import { type CursorData } from './Chart';
-import { DigitalChannelStates, DigitalChannelsType } from './data/dataTypes';
+import {
+    DigitalChannelStates,
+    DigitalChannelsType,
+    MultiDigitalChannelState,
+} from './data/dataTypes';
 import crossHairPlugin from './plugins/chart.crossHair';
 
-const dataColor = colors.nordicBlue;
-
 interface DigitalChannelsProperties {
-    lineData: DigitalChannelStates[];
+    lineData: MultiDigitalChannelState[];
     digitalChannels: DigitalChannelsType;
     zoomedOutTooFar: boolean;
     cursorData: CursorData;
@@ -54,15 +56,26 @@ const DigitalChannels = ({
         animation: false,
     };
 
+    const currentChannel = getCurrentChannel() ?? 0;
+
+    if (lineData[currentChannel] === undefined) {
+        console.log(
+            `DigitalChannels: currentChannel: ${currentChannel}, lineData: ${JSON.stringify(
+                lineData
+            )}`
+        );
+        return null;
+    }
+
     const commonLineData: Partial<LineControllerDatasetOptions> = {
-        backgroundColor: dataColor,
-        borderColor: dataColor,
+        backgroundColor: lineData[currentChannel].color,
+        borderColor: lineData[currentChannel].color,
         borderWidth: 1.5,
         pointStyle: false,
         stepped: 'before',
     };
 
-    const bitsChartData = lineData
+    const bitsChartData = lineData[currentChannel].data
         .map((singleBitLineData: DigitalChannelStates, i: number) => ({
             datasets: [
                 {

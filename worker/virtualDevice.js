@@ -37,11 +37,14 @@ const dataMockRaw = () => {
             Math.round(0x1ff * Math.sin((2 * Math.PI * tmpIndex) / sampRate));
         const range = 3;
         const counter = tmpIndex & 0x3f;
-        const logic = tmpIndex % 2;
+        const logic = tmpIndex & 0xff;
 
         tmpIndex += 1;
 
-        data.writeUInt32LE(generateData(adc, range, counter, logic), i * 4);
+        data.writeUInt32LE(
+            generateData(adc, range, counter, logic) >>> 0,
+            i * 4
+        );
     }
 
     timeStamp = now;

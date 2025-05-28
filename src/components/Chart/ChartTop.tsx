@@ -23,7 +23,7 @@ import {
     toggleYAxisLog,
 } from '../../slices/chartSlice';
 import { dataLoggerState } from '../../slices/dataLoggerSlice';
-import { isDataLoggerPane } from '../../utils/panes';
+import { isDataLoggerPane, isMultiDevicePane } from '../../utils/panes';
 import { AmpereChartJS } from './AmpereChart/LineChart';
 import ChartOptions from './ChartOptions';
 
@@ -62,6 +62,7 @@ const ChartTop = ({
     const samplingRunning = useSelector(isSamplingRunning);
     const fps = useSelector(getLiveModeFPS);
     const dataLoggerPane = useSelector(isDataLoggerPane);
+    const multiDevicePane = useSelector(isMultiDevicePane);
     const { yMin, yMax } = useSelector(getChartYAxisRange);
     const yAxisLock = yMin != null && yMax != null;
 
@@ -121,7 +122,7 @@ const ChartTop = ({
                 />
             </div>
 
-            {dataLoggerPane && (
+            {(dataLoggerPane || multiDevicePane) && (
                 <>
                     <div className="tw-order-2 tw-flex tw-w-full tw-flex-row tw-justify-center tw-gap-x-2 tw-place-self-start xl:tw-order-1 xl:tw-w-fit xl:tw-place-self-auto">
                         {timeWindowLabels.map(label => (

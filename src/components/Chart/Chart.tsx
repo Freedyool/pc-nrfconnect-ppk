@@ -61,7 +61,7 @@ import type { AmpereChartJS } from './AmpereChart/LineChart';
 import LineChart from './AmpereChart/LineChart';
 import ChartTop from './ChartTop';
 import dataAccumulatorInitialiser from './data/dataAccumulator';
-import { DigitalChannelStates, MultiAmpereState } from './data/dataTypes';
+import { MultiAmpereState, MultiDigitalChannelState } from './data/dataTypes';
 import DigitalChannels from './DigitalChannels';
 import StatBox, { statAbortController } from './StatBox';
 import TimeSpanBottom from './TimeSpan/TimeSpanBottom';
@@ -114,7 +114,7 @@ const updateChart = async (
     windowEnd: number,
     setData: (data: {
         ampereLineData: MultiAmpereState[];
-        bitsLineData: DigitalChannelStates[];
+        bitsLineData: MultiDigitalChannelState[];
     }) => void,
     setProcessing: (processing: boolean) => void,
     setWindowStats: (
@@ -173,7 +173,7 @@ const updateChart = async (
     const maxs: number[] = [];
     const deltas: number[] = [];
     const ampereLineData: MultiAmpereState[] = [];
-    const bitsLineData: DigitalChannelStates[] = [];
+    const bitsLineData: MultiDigitalChannelState[] = [];
 
     multiProcessedData.forEach((processedData, index) => {
         const avgTemp = processedData.averageLine.reduce(
@@ -206,6 +206,12 @@ const updateChart = async (
         ampereLineData[index] = {
             name: `Device${index}`,
             data: processedData.ampereLineData,
+            color: getColor(index),
+        };
+
+        bitsLineData[index] = {
+            name: `Device${index}`,
+            data: processedData.bitsLineData,
             color: getColor(index),
         };
 
@@ -453,7 +459,7 @@ const Chart = () => {
 
     const [data, setData] = useState<{
         ampereLineData: MultiAmpereState[];
-        bitsLineData: DigitalChannelStates[];
+        bitsLineData: MultiDigitalChannelState[];
     }>({ ampereLineData: [], bitsLineData: [] });
 
     const [windowStats, setWindowStats] = useState<{

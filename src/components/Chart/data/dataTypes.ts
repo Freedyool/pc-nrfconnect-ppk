@@ -41,6 +41,12 @@ export interface MultiAmpereState {
     color: string;
 }
 
+export interface MultiDigitalChannelState {
+    name: string;
+    data: DigitalChannelStates[];
+    color: string;
+}
+
 export function isBitStateIndexType(
     value: unknown
 ): value is BitStateIndexType {
