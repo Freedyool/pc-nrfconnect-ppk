@@ -24,6 +24,7 @@ import {
     updateSpikeFilter,
 } from '../../actions/deviceActions';
 import DeprecatedDeviceDialog from '../../features/DeprecatedDevice/DeprecatedDevice';
+import { triggerForceRerender as triggerForceRerenderMiniMap } from '../../features/minimap/minimapSlice';
 import ProgressDialog from '../../features/ProgressDialog/ProgressDialog';
 import { getShowProgressDialog } from '../../features/ProgressDialog/progressSlice';
 import {
@@ -32,7 +33,10 @@ import {
     isSavePending,
     updateCurrentDeviceAction,
 } from '../../slices/appSlice';
-import { isSessionActive } from '../../slices/chartSlice';
+import {
+    isSessionActive,
+    triggerForceRerender as triggerForceRerenderMainChart,
+} from '../../slices/chartSlice';
 import { resetGainsToDefaults } from '../../slices/gainsSlice';
 import {
     getCurrentSelector,
@@ -113,13 +117,12 @@ export default () => {
         device: MultiDeviceItem,
         channel: number
     ) => {
-        dispatch(setCurrentSelector(selector));
-
         if (!device.device) {
             console.log('no device warning!');
             return;
         }
 
+        dispatch(setCurrentSelector(selector));
         switchCurrentDevice(channel, device.device);
 
         dispatch(
@@ -130,8 +133,10 @@ export default () => {
                 isSmuMode: device.isSmuMode,
             })
         );
-
         dispatch(updateRegulator({ vdd: device.currentVdd }));
+
+        dispatch(triggerForceRerenderMainChart());
+        dispatch(triggerForceRerenderMiniMap());
     };
 
     const multiDeviceSelector = selectors.map((selName, sel) => {
