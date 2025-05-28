@@ -35,16 +35,16 @@ import {
 import { isSessionActive } from '../../slices/chartSlice';
 import { resetGainsToDefaults } from '../../slices/gainsSlice';
 import {
+    getCurrentSelector,
     getDeviceSelectorList,
-    getSelectedDeviceIndex,
-    setSelectedDevice,
+    setCurrentSelector,
 } from '../../slices/multiDeviceSlice';
 import { resetSpikeFilterToDefaults } from '../../slices/spikeFilterSlice';
 import {
     resetVoltageRegulatorMaxCapPPK2,
     updateRegulator,
 } from '../../slices/voltageRegulatorSlice';
-import { getDevice } from '../../utils/multiDevice';
+import { getDevice, MultiDeviceItem } from '../../utils/multiDevice';
 import {
     isDataLoggerPane,
     isMultiDevicePane,
@@ -81,7 +81,6 @@ const useConfirmBeforeClose = () => {
 
 export default () => {
     const dispatch = useDispatch();
-    const deviceIndex = useSelector(getSelectedDeviceIndex);
     const deviceConnected = useSelector(selectedDevice);
     const virtualDeviceConnected = useSelector(selectedVirtualDevice);
     const deviceOpen = useSelector(deviceOpenSelector);
@@ -93,6 +92,7 @@ export default () => {
     const multiDevicePane = useSelector(isMultiDevicePane);
 
     const selectors = useSelector(getDeviceSelectorList);
+    const currentSelector = useSelector(getCurrentSelector);
 
     useConfirmBeforeClose();
 
@@ -108,48 +108,55 @@ export default () => {
         );
     }
 
-    const multiDeviceSelector = selectors.map((sel, i) => {
-        let device = getDevice(i);
+    const onDeviceItemClick = (
+        selector: number,
+        device: MultiDeviceItem,
+        channel: number
+    ) => {
+        dispatch(setCurrentSelector(selector));
 
-        if (!device) {
+        if (!device.device) {
+            console.log('no device warning!');
+            return;
+        }
+
+        switchCurrentDevice(channel, device.device);
+
+        dispatch(
+            updateCurrentDeviceAction({
+                capabilities: device.capabilities,
+                portName: device.portName,
+                isRunning: device.deviceRunning,
+                isSmuMode: device.isSmuMode,
+            })
+        );
+
+        dispatch(updateRegulator({ vdd: device.currentVdd }));
+    };
+
+    const multiDeviceSelector = selectors.map((selName, sel) => {
+        const deviceItem = getDevice(sel);
+
+        if (!deviceItem) {
             return null;
         }
+
+        const { device, channel } = deviceItem;
 
         return (
             <button
                 type="button"
-                key={`d${i + 1}`}
+                key={selName}
                 className={classNames(
                     'tw-h-6 tw-grow tw-border tw-border-solid tw-border-gray-700 tw-leading-none',
-                    i === deviceIndex
+                    sel === currentSelector
                         ? 'tw-bg-white tw-text-gray-700'
                         : 'tw-bg-gray-700 tw-text-white'
                 )}
-                value={i}
-                onClick={() => {
-                    device = getDevice(i);
-
-                    dispatch(setSelectedDevice(i));
-
-                    if (!device) {
-                        return null;
-                    }
-
-                    switchCurrentDevice(i, device.device);
-
-                    dispatch(
-                        updateCurrentDeviceAction({
-                            capabilities: device.capabilities,
-                            portName: device.portName,
-                            isRunning: device.deviceRunning,
-                            isSmuMode: device.isSmuMode,
-                        })
-                    );
-
-                    dispatch(updateRegulator({ vdd: device.currentVdd }));
-                }}
+                value={channel}
+                onClick={() => onDeviceItemClick(sel, device, channel)}
             >
-                {device?.portName ?? sel}
+                {device?.portName ?? selName}
             </button>
         );
     });

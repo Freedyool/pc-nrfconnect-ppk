@@ -26,7 +26,7 @@ import {
     toggleDigitalChannels,
     toggleTimestamps,
 } from '../../slices/chartSlice';
-import { isDataLoggerPane } from '../../utils/panes';
+import { isDataLoggerPane, isMultiDevicePane } from '../../utils/panes';
 import DigitalChannels from './DigitalChannels';
 
 export default () => {
@@ -35,7 +35,8 @@ export default () => {
     const timestampsVisible = useSelector(isTimestampsVisible);
     const systemTime = useSelector(showSystemTime);
     const showMinimap = useSelector(getShowMinimap);
-    const dataLoggerPane = useSelector(isDataLoggerPane);
+    const loggerPane =
+        useSelector(isDataLoggerPane) || useSelector(isMultiDevicePane);
     const deviceOpen = useSelector(isDeviceOpen);
 
     return (
@@ -71,7 +72,7 @@ export default () => {
             />
             {digitalChannelsVisible && <DigitalChannels />}
 
-            {dataLoggerPane && (
+            {loggerPane && (
                 <Toggle
                     label="Show Minimap"
                     title={`Click in order to ${

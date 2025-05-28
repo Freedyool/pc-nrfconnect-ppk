@@ -6,8 +6,10 @@
 
 import { Plugin } from 'chart.js';
 
+import { getCurrentChannel } from '../../../actions/deviceActions';
 import type { MinimapChart } from '../../../features/minimap/Minimap';
 import { DataManager } from '../../../globals';
+import { getColor } from '../../../utils/multiDevice';
 
 interface MinimapScroll extends Plugin<'line'> {
     updateMinimapData: (chart: MinimapChart) => void;
@@ -187,11 +189,13 @@ const plugin: MinimapScroll = {
 
     updateMinimapData(chart) {
         if (!leftClickPressed) {
-            const data = DataManager().getMinimapData();
+            const chan = getCurrentChannel() ?? 0;
+            const data = DataManager().getMinimapData(chan);
             /* @ts-expect-error Have not figured out how to handle this */
             chart.data.datasets[0].data = data;
+            chart.data.datasets[0].borderColor = getColor(chan);
             if (chart.options.scales?.x != null) {
-                chart.options.scales.x.max = DataManager().getTimestamp();
+                chart.options.scales.x.max = DataManager().getTimestamp(chan);
             }
             chart.update();
             chart.redrawSlider?.();
@@ -200,9 +204,10 @@ const plugin: MinimapScroll = {
     },
 
     clearMinimap(chart) {
+        const chan = getCurrentChannel() ?? 0;
         chart.data.datasets[0].data = [];
         if (chart.options.scales?.x != null) {
-            chart.options.scales.x.max = DataManager().getTimestamp();
+            chart.options.scales.x.max = DataManager().getTimestamp(chan);
         }
         chart.update();
 

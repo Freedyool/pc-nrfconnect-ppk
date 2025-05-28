@@ -19,9 +19,7 @@ import {
 import { close, open } from '../actions/deviceActions';
 import { setShowPPK1Dialog } from '../features/DeprecatedDevice/DeprecatedDeviceSlice';
 import {
-    addDeviceCount,
     getDeviceSelectorList,
-    reduceDeviceCount,
     setDeviceSelectorList,
 } from '../slices/multiDeviceSlice';
 import { isMultiDevicePane } from '../utils/panes';
@@ -89,7 +87,6 @@ export default () => {
                 logger.info(
                     `${sel} Validating firmware for device with s/n ${device.serialNumber}`
                 );
-                dispatch(addDeviceCount());
             }}
             onDeviceIsReady={(sel, device) => {
                 logger.info(`Opening device with s/n ${device.serialNumber}`);
@@ -97,7 +94,6 @@ export default () => {
             }}
             onDeviceDeselected={sel => {
                 logger.info('Deselecting device', sel);
-                dispatch(reduceDeviceCount());
                 dispatch(close(sel));
             }}
             virtualDevices={['ADV-PPK1', 'ADV-PPK2', 'ADV-PPK3']}
@@ -108,13 +104,11 @@ export default () => {
                     traits: {},
                     serialNumber: device,
                 };
-                dispatch(addDeviceCount());
                 dispatch(open(sel, virtualDevice));
             }}
             onVirtualDeviceDeselected={sel => {
                 logger.info('Deselecting virtual device', sel);
                 dispatch(close(sel));
-                dispatch(reduceDeviceCount());
             }}
         />
     );

@@ -15,7 +15,6 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
     AppDispatch,
     AppThunk,
-    colors,
     useHotKey,
 } from '@nordicsemiconductor/pc-nrfconnect-shared';
 import {
@@ -55,8 +54,8 @@ import {
     setLiveMode,
 } from '../../slices/chartSlice';
 import { getProgress } from '../../slices/triggerSlice';
-import { getAllDeviceName } from '../../utils/multiDevice';
-import { isDataLoggerPane } from '../../utils/panes';
+import { getAllDeviceName, getColor } from '../../utils/multiDevice';
+import { isDataLoggerPane, isMultiDevicePane } from '../../utils/panes';
 import { type booleanTupleOf8 } from '../../utils/persistentStore';
 import type { AmpereChartJS } from './AmpereChart/LineChart';
 import LineChart from './AmpereChart/LineChart';
@@ -77,8 +76,6 @@ ChartJS.register(
     LogarithmicScale,
     Title
 );
-
-const multiColors = [colors.nordicBlue, colors.red, colors.green];
 
 export type CursorData = {
     cursorBegin: number | null | undefined;
@@ -209,7 +206,7 @@ const updateChart = async (
         ampereLineData[index] = {
             name: `Device${index}`,
             data: processedData.ampereLineData,
-            color: multiColors[index],
+            color: getColor(index),
         };
 
         deltas[index] =
@@ -241,6 +238,7 @@ const Chart = () => {
     const samplingRunning = useSelector(isSamplingRunning);
     const triggerProgress = useSelector(getProgress);
     const dataLoggerPane = useSelector(isDataLoggerPane);
+    const multiDevicePane = useSelector(isMultiDevicePane);
 
     const waitingForTrigger =
         samplingRunning &&
@@ -556,16 +554,16 @@ const Chart = () => {
         windowDuration,
     ]);
 
-    const multiStats = getAllDeviceName().map((v, i) => (
-        <div className="tw-flex tw-flex-grow tw-flex-wrap tw-gap-2" key={v}>
+    const multiStats = getAllDeviceName().map((name, channel) => (
+        <div className="tw-flex tw-flex-grow tw-flex-wrap tw-gap-2" key={name}>
             <StatBox
                 cursorBegin={cursorBegin}
                 cursorEnd={cursorEnd}
-                average={windowStats?.average[i]}
-                max={windowStats?.max[i]}
-                delta={windowStats?.delta[i]}
-                color={multiColors[i]}
-                channel={i}
+                average={windowStats?.average[channel]}
+                max={windowStats?.max[channel]}
+                delta={windowStats?.delta[channel]}
+                color={getColor(channel)}
+                channel={channel}
                 rerenderTrigger={rerenderTrigger}
                 resetCursor={resetCursor}
                 chartWindow={chartWindow}
@@ -609,14 +607,12 @@ const Chart = () => {
                 />
 
                 <div className="tw-flex tw-flex-col tw-gap-4 tw-py-4 tw-pl-16 tw-pr-8">
-                    {dataLoggerPane && (
+                    {(dataLoggerPane || multiDevicePane) && (
                         <div>
                             <Minimap />
                         </div>
                     )}
-                    {/* <div className="tw-flex tw-flex-grow tw-flex-wrap tw-gap-2"> */}
                     {multiStats}
-                    {/* </div> */}
                 </div>
             </div>
             {digitalChannelsVisible && (

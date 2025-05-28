@@ -63,7 +63,7 @@ import {
     setSamplingAttrsAction,
 } from '../slices/dataLoggerSlice';
 import { updateGainsAction } from '../slices/gainsSlice';
-import { setSelectedDevice } from '../slices/multiDeviceSlice';
+import { setCurrentSelector } from '../slices/multiDeviceSlice';
 import {
     clearProgress,
     getTriggerRecordingLength,
@@ -84,6 +84,7 @@ import {
     MultiDeviceItem,
     removeDevice,
     updateDevice,
+    updateDeviceByChannel,
 } from '../utils/multiDevice';
 import {
     isDataLoggerPane,
@@ -93,7 +94,7 @@ import {
 import { setSpikeFilter as persistSpikeFilter } from '../utils/persistentStore';
 
 let device: null | SerialDevice = null;
-let selector: null | number = null;
+let channel: null | number = null;
 let updateRequestInterval: NodeJS.Timeout | undefined;
 let releaseFileWriteListener: (() => void) | undefined;
 
@@ -110,18 +111,18 @@ export const setupOptions =
                 case 'DataLogger':
                     DataManager().initializeLiveSession(
                         getSessionRootFolder(getState()),
-                        selector ?? 0
+                        channel ?? 0
                     );
                     break;
                 case 'Scope':
                     DataManager().initializeTriggerSession(60);
                     break;
                 case 'MultiDevice':
-                    getAllDevice().forEach((dev, index) => {
+                    getAllDevice().forEach((dev, chan) => {
                         if (dev) {
                             DataManager().initializeLiveSession(
                                 getSessionRootFolder(getState()),
-                                index
+                                chan
                             );
                         }
                     });
@@ -205,7 +206,7 @@ export const updateSpikeFilter = (): AppThunk<RootState> => (_, getState) => {
 export const close =
     (sel: number): AppThunk<RootState, Promise<void>> =>
     async (dispatch, getState) => {
-        const dev = getDevice(sel)?.device;
+        const dev = getDevice(sel)?.device.device;
         clearInterval(updateRequestInterval);
         if (!dev) {
             return;
@@ -253,7 +254,7 @@ export const open =
         // TODO: Check if this is right?
         // Is this suppose to be run when another device is already connected?
         // Seems like it closes old device somewhere else first, meaning this is redundant.
-        if (getDevice(sel)?.device) {
+        if (getDevice(sel)?.device.device) {
             await dispatch(close(sel));
         }
 
@@ -382,8 +383,17 @@ export const open =
         );
 
         try {
-            device = new SerialDevice(deviceInfo, onSample, sel);
-            selector = sel;
+            const deviceItem: MultiDeviceItem = {
+                selector: sel,
+                portName: deviceInfo.serialNumber,
+                isSmuMode: true,
+                deviceRunning: false,
+            };
+
+            // convert selector to channel
+            channel = addDevice(deviceItem);
+
+            device = new SerialDevice(deviceInfo, onSample, channel);
 
             dispatch(
                 setSamplingAttrsAction({
@@ -422,18 +432,14 @@ export const open =
 
             dispatch(clearFileLoadedAction());
 
-            const deviceItem: MultiDeviceItem = {
-                selector: sel,
+            updateDevice(sel, {
                 device,
-                portName: deviceInfo.serialNumber,
                 isSmuMode,
                 deviceRunning: !isSmuMode,
                 capabilities: device.capabilities,
                 currentVdd: metadata.vdd,
-            };
-
-            addDevice(deviceItem);
-            dispatch(setSelectedDevice(sel));
+            });
+            dispatch(setCurrentSelector(sel));
 
             logger.info('PPK started', sel);
         } catch (err) {
@@ -507,7 +513,7 @@ export const updateRegulator =
         await device!.ppkUpdateRegulator(vdd);
         logger.info(`Voltage regulator updated to ${vdd} mV`);
         dispatch(updateRegulatorAction({ currentVDD: vdd }));
-        updateDevice(selector!, { currentVdd: vdd });
+        updateDeviceByChannel(channel!, { currentVdd: vdd });
     };
 
 export const updateGains =
@@ -542,7 +548,7 @@ export const setDeviceRunning =
         await device!.ppkDeviceRunning(isRunning ? 1 : 0);
         logger.info(`DUT ${isRunning ? 'ON' : 'OFF'}`);
         dispatch(setDeviceRunningAction({ isRunning }));
-        updateDevice(selector!, { deviceRunning: isRunning });
+        updateDeviceByChannel(channel!, { deviceRunning: isRunning });
     };
 
 export const setPowerMode =
@@ -558,7 +564,7 @@ export const setPowerMode =
             dispatch(setPowerModeAction({ isSmuMode: false }));
             await dispatch(setDeviceRunning(true));
         }
-        updateDevice(selector!, { isSmuMode });
+        updateDeviceByChannel(channel!, { isSmuMode });
     };
 
 let latestTrigger: Promise<unknown> | undefined;
@@ -651,9 +657,9 @@ export const processTrigger =
         }
     };
 
-export const switchCurrentDevice = (sel: number, dev: SerialDevice) => {
-    selector = sel;
+export const switchCurrentDevice = (chan: number, dev: SerialDevice) => {
+    channel = chan;
     device = dev;
 };
 
-export const getCurrentSelector = () => selector;
+export const getCurrentChannel = () => channel;
