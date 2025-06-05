@@ -310,7 +310,7 @@ export const open =
                     cappedValue >= getState().app.trigger.level;
                 prevCappedValue = cappedValue;
 
-                if (!DataManager().isInSync(chan)) {
+                if (!DataManager().isInSync()) {
                     return;
                 }
 

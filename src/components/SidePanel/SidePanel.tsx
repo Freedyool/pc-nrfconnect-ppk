@@ -9,16 +9,18 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
     addConfirmBeforeClose,
     Button,
-    classNames,
     clearConfirmBeforeClose,
     Group,
+    NumberInput,
     selectedDevice,
     selectedVirtualDevice,
     SidePanel,
     Spinner,
+    StateSelector,
 } from '@nordicsemiconductor/pc-nrfconnect-shared';
 
 import {
+    getCurrentChannel,
     switchCurrentDevice,
     updateAllGains,
     updateSpikeFilter,
@@ -27,6 +29,7 @@ import DeprecatedDeviceDialog from '../../features/DeprecatedDevice/DeprecatedDe
 import { triggerForceRerender as triggerForceRerenderMiniMap } from '../../features/minimap/minimapSlice';
 import ProgressDialog from '../../features/ProgressDialog/ProgressDialog';
 import { getShowProgressDialog } from '../../features/ProgressDialog/progressSlice';
+import { DataManager } from '../../globals';
 import {
     deviceOpen as deviceOpenSelector,
     isFileLoaded,
@@ -41,7 +44,9 @@ import { resetGainsToDefaults } from '../../slices/gainsSlice';
 import {
     getCurrentSelector,
     getDeviceSelectorList,
+    getSampleOffset,
     setCurrentSelector,
+    setSampleOffset,
 } from '../../slices/multiDeviceSlice';
 import { resetSpikeFilterToDefaults } from '../../slices/spikeFilterSlice';
 import {
@@ -98,6 +103,8 @@ export default () => {
     const selectors = useSelector(getDeviceSelectorList);
     const currentSelector = useSelector(getCurrentSelector);
 
+    const sampleOffset = useSelector(getSampleOffset);
+
     useConfirmBeforeClose();
 
     const connecting = deviceConnected && !deviceOpen;
@@ -122,6 +129,9 @@ export default () => {
             return;
         }
 
+        const offset = DataManager().getSampleOffset(channel);
+        dispatch(setSampleOffset(offset));
+
         dispatch(setCurrentSelector(selector));
         switchCurrentDevice(channel, device.device);
 
@@ -139,7 +149,7 @@ export default () => {
         dispatch(triggerForceRerenderMiniMap());
     };
 
-    const multiDeviceSelector = selectors.map((selName, sel) => {
+    const items = selectors.map((selName, sel) => {
         const deviceItem = getDevice(sel);
 
         if (!deviceItem) {
@@ -148,26 +158,58 @@ export default () => {
 
         const { device, channel } = deviceItem;
 
-        return (
-            <button
-                type="button"
-                key={selName}
-                className={classNames(
-                    'tw-h-6 tw-grow tw-border tw-border-solid tw-border-gray-700 tw-leading-none',
-                    sel === currentSelector
-                        ? 'tw-bg-white tw-text-gray-700'
-                        : 'tw-bg-gray-700 tw-text-white'
-                )}
-                value={channel}
-                onClick={() => onDeviceItemClick(sel, device, channel)}
-            >
-                {device?.portName ?? selName}
-            </button>
-        );
+        return {
+            key: selName,
+            renderItem: (
+                <span title={device?.portName ?? 'Unkown'}>CH{channel}</span>
+            ),
+        };
     });
+
+    const unKnownItem = { key: '-1', renderItem: <span>Unkown</span> };
+
+    const toggleSelector = (sel: number) => {
+        const deviceItem = getDevice(sel);
+        if (!deviceItem) {
+            console.warn(`No device found for selector ${sel}`);
+            return;
+        }
+        const { device, channel } = deviceItem;
+        onDeviceItemClick(sel, device, channel);
+    };
 
     return (
         <SidePanel className="side-panel tw-mt-9">
+            {multiDevicePane &&
+                items.filter(item => item !== null).length > 1 && (
+                    <Group heading="Channel Selector" gap={4}>
+                        <StateSelector
+                            items={
+                                items.filter(item => item !== null) as {
+                                    key: string;
+                                    renderItem: React.ReactNode;
+                                }[]
+                            }
+                            onSelect={toggleSelector}
+                            selectedItem={items[currentSelector] ?? unKnownItem}
+                        />
+                        <NumberInput
+                            label="Set sample offset to"
+                            value={sampleOffset}
+                            unit="us"
+                            range={{ min: 0, max: 1000000 }}
+                            onChange={value => {
+                                dispatch(setSampleOffset(value));
+                            }}
+                            onChangeComplete={value =>
+                                DataManager().setSampleOffset(
+                                    getCurrentChannel() ?? 0,
+                                    value
+                                )
+                            }
+                        />
+                    </Group>
+                )}
             {!deviceConnected && !virtualDeviceConnected && <Load />}
             {!fileLoaded &&
                 !deviceConnected &&
@@ -213,11 +255,6 @@ export default () => {
                         Reset to default Configuration
                     </Button>
                 </Group>
-            )}
-            {multiDevicePane && (
-                <div className="tw-flex tw-flex-row tw-gap-0.5">
-                    {multiDeviceSelector}
-                </div>
             )}
             <DeprecatedDeviceDialog />
             {showProgressDialog && <ProgressDialog />}

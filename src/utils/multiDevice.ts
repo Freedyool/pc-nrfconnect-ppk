@@ -17,6 +17,7 @@ export interface MultiDeviceItem {
     deviceRunning: boolean;
     capabilities?: Capabilities;
     currentVdd?: number;
+    sampleOffset?: number;
 }
 
 const multiDevices: MultiDeviceItem[] = [];
@@ -82,3 +83,11 @@ export const getDeviceCount = () =>
 export const getAllDevice = () => multiDevices.map(d => d.device);
 export const getAllDeviceName = () => multiDevices.map(d => d.portName);
 export const getColor = (chan: number) => multiColors[chan] ?? colors.primary;
+
+export const getSampleOffsetByChannel = (channel: number): number => {
+    const device = multiDevices[channel];
+    if (device && device.sampleOffset !== undefined) {
+        return device.sampleOffset;
+    }
+    return 0; // Default offset if not set
+};

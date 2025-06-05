@@ -27,6 +27,7 @@ const tempBuffers: Uint8Array[] = [];
 const tempViews: DataView[] = [];
 
 export interface GlobalOptions {
+    startSystemTime: number; // ms, the time when the session started, used to calculate the time offset
     /** The number of samples per second */
     samplesPerSecond: number;
     /** @var index: pointer to the index of the last sample in data array */
@@ -40,17 +41,20 @@ export interface GlobalOptions {
         onSuccess: (writeBuffer: WriteBuffer, absoluteTime: number) => void;
         onFail: (error: Error) => void;
     }[];
-    inSyncOffset: number;
+    sampleOffset: number[];
+    inSyncOffset: number[];
     lastInSyncTime: number;
 }
 
 const options: GlobalOptions = {
+    startSystemTime: 0, // ms, the time when the session started, used to calculate the time offset
     samplesPerSecond: initialSamplesPerSecond,
     timeReachedTriggers: [],
     fileBuffer: [],
     writeBuffer: [],
     foldingBuffer: [],
-    inSyncOffset: 0,
+    sampleOffset: [],
+    inSyncOffset: [],
     lastInSyncTime: 0,
 };
 
@@ -134,12 +138,22 @@ const getTimestamp = (chan?: number) => {
 };
 
 const getStartSystemTime = () => {
-    const min = options.fileBuffer.reduce(
-        (acc, buffer) =>
-            Math.min(acc, buffer.getFirstWriteTime() ?? Number.MAX_VALUE),
-        Number.MAX_VALUE
-    );
-    return min !== Number.MAX_VALUE ? min : 0;
+    if (options.startSystemTime === 0) {
+        const min = options.fileBuffer.reduce(
+            (acc, buffer) =>
+                Math.min(acc, buffer.getFirstWriteTime() ?? Number.MAX_VALUE),
+            Number.MAX_VALUE
+        );
+        options.startSystemTime = min !== Number.MAX_VALUE ? min : 0;
+    }
+    return options.startSystemTime;
+};
+
+const getSampleOffset = (chan: number): number =>
+    options.sampleOffset[chan] ?? 0;
+
+const setSampleOffset = (chan: number, offset: number) => {
+    options.sampleOffset[chan] = offset;
 };
 
 export const normalizeTimeFloor = (time: number) =>
@@ -158,10 +172,12 @@ export const DataManager = () => ({
         options.fileBuffer[chan]?.getSessionFolder(),
 
     getStartSystemTime,
+    getSampleOffset,
+    setSampleOffset,
     getData: async (
         buffer: Buffer,
         fromTime = 0,
-        toTime = getTimestamp(0),
+        toTime = getTimestamp(),
         bias: 'start' | 'end' | undefined = undefined,
         chan = 0,
         onLoading: (loading: boolean) => void = () => {}
@@ -194,6 +210,7 @@ export const DataManager = () => ({
                     chan
                 ].getFirstWriteTime()} - ${getStartSystemTime()}`
             );
+
             const offset =
                 (((timeOffset * microSecondsPerMilliSecond - fromTime) *
                     getSamplesPerSecond()) /
@@ -215,19 +232,21 @@ export const DataManager = () => ({
                 );
             }
             return new FileData(
-                Buffer.concat([dummy, buffer]),
+                Buffer.concat([buffer, dummy]),
                 numberOfBytesToRead
             );
         }
 
-        const byteOffset =
-            timestampToIndex(
-                fromTime - timeOffset * microSecondsPerMilliSecond
-            ) * frameSize;
+        if (fromTime < options.sampleOffset[chan]) {
+            console.warn(
+                `chan ${chan} fromTime ${fromTime} is less then sampleOffset ${options.sampleOffset[chan]}`
+            );
+            options.sampleOffset[chan] = fromTime;
+        }
 
         const readBytes = await options.fileBuffer[chan].read(
             buffer,
-            byteOffset,
+            timestampToIndex(fromTime - options.sampleOffset[chan]) * frameSize,
             numberOfBytesToRead,
             bias,
             onLoading
@@ -245,45 +264,55 @@ export const DataManager = () => ({
     },
 
     getTimestamp,
-    isInSync: (chan = 0) => {
-        const firstWriteTime =
-            options.writeBuffer[chan]?.getFirstWriteTime() ??
-            options.fileBuffer[chan]?.getFirstWriteTime() ??
-            0;
+    isInSync: () =>
+        options.inSyncOffset
+            .map((offset, chan) => {
+                const firstWriteTime =
+                    options.writeBuffer[chan]?.getFirstWriteTime() ??
+                    options.fileBuffer[chan]?.getFirstWriteTime() ??
+                    0;
 
-        if (firstWriteTime === 0) return true;
+                if (firstWriteTime === 0) return true;
 
-        const actualTimePassed = Date.now() - firstWriteTime;
+                const actualTimePassed = Date.now() - firstWriteTime;
 
-        const processedBytes =
-            options.writeBuffer[chan]?.getBytesWritten() ??
-            options.fileBuffer[chan]?.getSessionInBytes() ??
-            0;
+                const processedBytes =
+                    options.writeBuffer[chan]?.getBytesWritten() ??
+                    options.fileBuffer[chan]?.getSessionInBytes() ??
+                    0;
 
-        const simulationDelta =
-            indexToTimestamp(processedBytes / frameSize - 1) / 1000;
-        if (simulationDelta > actualTimePassed) return true;
+                const simulationDelta =
+                    indexToTimestamp(processedBytes / frameSize - 1) / 1000;
+                if (simulationDelta > actualTimePassed) return true;
 
-        const pcAheadDelta = actualTimePassed - simulationDelta;
+                const pcAheadDelta = actualTimePassed - simulationDelta;
 
-        // We get serial data every 30 ms regardless of sampling rate.
-        // If PC is ahead by more then 1.5 samples we are not in sync
-        let inSync = pcAheadDelta - options.inSyncOffset <= 45;
+                // We get serial data every 30 ms regardless of sampling rate.
+                // If PC is ahead by more then 1.5 samples we are not in sync
+                let inSync = pcAheadDelta - offset <= 45;
 
-        if (inSync) {
-            options.lastInSyncTime = Date.now();
-        }
+                if (inSync) {
+                    options.lastInSyncTime = Date.now();
+                } else {
+                    // console.log(
+                    //     `chan ${chan} not in sync, offset: ${offset}, actual: ${actualTimePassed}, simulation: ${simulationDelta}, pcAheadDelta: ${pcAheadDelta}`
+                    // );
+                }
 
-        // If Data is lost in the serial and this was not detected we need to resync the timers so we do not get stuck rendering at 1 FPS
-        // NOTE: this is temporary fix until PPK protocol can handle data loss better
-        if (Date.now() - options.lastInSyncTime >= 1000) {
-            options.lastInSyncTime = Date.now();
-            options.inSyncOffset = actualTimePassed - simulationDelta;
-            inSync = true;
-        }
+                // If Data is lost in the serial and this was not detected we need to resync the timers so we do not get stuck rendering at 1 FPS
+                // NOTE: this is temporary fix until PPK protocol can handle data loss better
+                if (Date.now() - options.lastInSyncTime >= 1000) {
+                    options.lastInSyncTime = Date.now();
+                    options.inSyncOffset[chan] =
+                        actualTimePassed - simulationDelta;
+                    inSync = true;
+                }
 
-        return inSync;
-    },
+                return inSync;
+
+                // }).filter(inSync => inSync).length === options.fileBuffer.length;
+            })
+            .some(inSync => inSync),
 
     addData: (current: number, bits: number, chan = 0) => {
         if (
@@ -351,7 +380,9 @@ export const DataManager = () => ({
         options.writeBuffer = [];
         options.foldingBuffer = [];
         options.samplesPerSecond = initialSamplesPerSecond;
-        options.inSyncOffset = 0;
+        options.sampleOffset = [];
+        options.inSyncOffset = [];
+        options.startSystemTime = 0;
     },
     initializeLiveSession: (sessionRootPath: string, chan = 0) => {
         const sessionPath = path.join(sessionRootPath, v4());
@@ -363,11 +394,14 @@ export const DataManager = () => ({
             14
         );
         options.foldingBuffer[chan] = new FoldingBuffer();
+        options.sampleOffset[chan] = 0;
+        options.inSyncOffset[chan] = 0;
     },
     initializeTriggerSession: (timeToRecordSeconds: number, chan = 0) => {
         options.writeBuffer[chan] = new WriteBuffer(
             timeToRecordSeconds * getSamplesPerSecond() * frameSize
         );
+        options.inSyncOffset[chan] = 0;
     },
     createSessionData: async (
         buffer: Uint8Array,

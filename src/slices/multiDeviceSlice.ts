@@ -11,11 +11,13 @@ import type { RootState } from '.';
 export interface MultiDeviceState {
     deviceSelectorList: string[];
     currentSelector: number;
+    sampleOffset: number;
 }
 
 const initialState = (): MultiDeviceState => ({
     deviceSelectorList: ['DEVICE1', 'DEVICE2'],
     currentSelector: 0,
+    sampleOffset: 0,
 });
 
 const multiDeviceSlice = createSlice({
@@ -28,6 +30,9 @@ const multiDeviceSlice = createSlice({
         setCurrentSelector: (state, action: PayloadAction<number>) => {
             state.currentSelector = action.payload;
         },
+        setSampleOffset: (state, action: PayloadAction<number>) => {
+            state.sampleOffset = action.payload;
+        },
     },
 });
 
@@ -36,8 +41,10 @@ export const getCurrentSelector = (state: RootState) =>
     state.app.multiDevice.currentSelector;
 export const getDeviceSelectorList = (state: RootState) =>
     state.app.multiDevice.deviceSelectorList;
+export const getSampleOffset = (state: RootState) =>
+    state.app.multiDevice.sampleOffset;
 
-export const { setDeviceSelectorList, setCurrentSelector } =
+export const { setDeviceSelectorList, setCurrentSelector, setSampleOffset } =
     multiDeviceSlice.actions;
 
 export default multiDeviceSlice.reducer;
