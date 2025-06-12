@@ -62,7 +62,31 @@
         "unzipper": "^0.10.14"
     },
     "eslintConfig": {
-        "extends": "./node_modules/@nordicsemiconductor/pc-nrfconnect-shared/config/eslintrc"
+        "extends": "./node_modules/@nordicsemiconductor/pc-nrfconnect-shared/config/eslintrc",
+        "overrides": [
+            {
+                "files": [
+                    "*.md"
+                ],
+                "rules": {
+                    "md/remark": [
+                        "error",
+                        {
+                            "plugins": [
+                                [
+                                    "remark-lint-table-pipe-alignment",
+                                    false
+                                ],
+                                [
+                                    "remark-lint-ordered-list-marker-value",
+                                    false
+                                ]
+                            ]
+                        }
+                    ]
+                }
+            }
+        ]
     },
     "prettier": "@nordicsemiconductor/pc-nrfconnect-shared/config/prettier.config.js",
     "dependencies": {
