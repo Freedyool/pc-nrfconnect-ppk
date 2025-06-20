@@ -7,6 +7,7 @@
 import React from 'react';
 import { useDispatch } from 'react-redux';
 import {
+    Device,
     DeviceSelector,
     DeviceSetupConfig,
     getAppFile,
@@ -65,6 +66,19 @@ export default () => {
                 dispatch(open(device));
             }}
             onDeviceDeselected={() => {
+                dispatch(close());
+            }}
+            virtualDevices={['ADV-PPK']}
+            onVirtualDeviceSelected={device => {
+                logger.info(`${device} selected`);
+                const virtualDevice: Device = {
+                    id: 0,
+                    traits: {},
+                };
+                dispatch(open(virtualDevice));
+            }}
+            onVirtualDeviceDeselected={() => {
+                logger.info('Deselecting device');
                 dispatch(close());
             }}
         />
