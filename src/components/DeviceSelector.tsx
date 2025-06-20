@@ -70,7 +70,6 @@ export default () => {
             }}
             virtualDevices={['ADV-PPK']}
             onVirtualDeviceSelected={device => {
-                logger.info(`${device} selected`);
                 const virtualDevice: Device = {
                     id: 0,
                     traits: {},
@@ -78,7 +77,6 @@ export default () => {
                 dispatch(open(virtualDevice));
             }}
             onVirtualDeviceDeselected={() => {
-                logger.info('Deselecting device');
                 dispatch(close());
             }}
         />
