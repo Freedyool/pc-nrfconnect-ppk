@@ -12,6 +12,7 @@ import {
     clearConfirmBeforeClose,
     Group,
     selectedDevice,
+    selectedVirtualDevice,
     SidePanel,
     Spinner,
 } from '@nordicsemiconductor/pc-nrfconnect-shared';
@@ -61,7 +62,8 @@ const useConfirmBeforeClose = () => {
 
 export default () => {
     const dispatch = useDispatch();
-    const deviceConnected = useSelector(selectedDevice);
+    const deviceConnected =
+        useSelector(selectedDevice) || useSelector(selectedVirtualDevice);
     const deviceOpen = useSelector(deviceOpenSelector);
     const fileLoaded = useSelector(isFileLoaded);
     const sessionActive = useSelector(isSessionActive);

@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "../node_modules/@nordicsemiconductor/pc-nrfconnect-shared"
+		},
+		{
+			"path": ".."
+		}
+	],
+	"settings": {}
+}
