@@ -99,6 +99,7 @@ process.on('message', msg => {
             process.send({ error: error.toString() });
         }
     }
+
     if (msg.write && ws) {
         // 检查WebSocket状态并发送数据
         switch (ws.readyState) {
@@ -130,17 +131,65 @@ process.on('message', msg => {
         process.send({ state: ws.readyState });
     }
 
-    if (msg.close && ws) {
-        workerLog('INFO', '🔄 正在关闭WebSocket连接...');
-        ws.close();
+    if (msg.close) {
+        workerLog('INFO', '🔄 收到关闭命令，正在关闭WebSocket连接...');
+        if (ws) {
+            try {
+                ws.close();
+                workerLog('INFO', '✅ WebSocket关闭命令已发送');
+            } catch (error) {
+                workerLog('ERROR', `❌ 关闭WebSocket时出错: ${error.message}`);
+            }
+        } else {
+            workerLog('INFO', '📌 没有活跃的WebSocket连接需要关闭');
+        }
+
+        // 给WebSocket一些时间关闭，然后退出进程
+        setTimeout(() => {
+            workerLog('INFO', '👋 Worker进程准备退出');
+            process.exit(0);
+        }, 500);
     }
 });
 
 process.on('disconnect', () => {
     workerLog('WARN', '🔌 父进程已断开连接，正在清理资源...');
+
     if (ws) {
-        ws.close();
+        try {
+            if (
+                ws.readyState === WebSocket.OPEN ||
+                ws.readyState === WebSocket.CONNECTING
+            ) {
+                ws.close();
+                workerLog('INFO', '✅ WebSocket已关闭');
+            }
+        } catch (error) {
+            workerLog('ERROR', `❌ 清理WebSocket时出错: ${error.message}`);
+        }
         ws = null;
     }
-    process.exit();
+
+    workerLog('INFO', '👋 Worker进程即将退出');
+    process.exit(0);
+});
+
+// 处理未捕获的异常
+process.on('uncaughtException', error => {
+    workerLog('ERROR', `❌ 未捕获的异常: ${error.message}`, error);
+    // 清理资源
+    if (ws) {
+        try {
+            ws.close();
+        } catch (e) {
+            // 忽略关闭时的错误
+        }
+        ws = null;
+    }
+    process.exit(1);
+});
+
+// 处理未处理的Promise拒绝
+process.on('unhandledRejection', reason => {
+    workerLog('ERROR', `❌ 未处理的Promise拒绝:`, reason);
 });

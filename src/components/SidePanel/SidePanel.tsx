@@ -37,6 +37,7 @@ import Gains from './Gains';
 import Instructions from './Instructions';
 import { Load, Save } from './LoadSave';
 import PowerMode from './PowerMode';
+import RemoteCapture from './RemoteCapture';
 import SessionSettings from './SessionSettings';
 import SpikeFilter from './SpikeFilter';
 import StartStop from './StartStop';
@@ -102,6 +103,7 @@ export default () => {
                     <>
                         <Save />
                         <DisplayOptions />
+                        <RemoteCapture />
                     </>
                 )}
             {(dataLoggerPane || !deviceConnected) && <SessionSettings />}

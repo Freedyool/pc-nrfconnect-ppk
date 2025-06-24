@@ -19,6 +19,7 @@ const DIGITAL_CHANNELS_VISIBLE = 'digitalChannelsVisible';
 const DIGITAL_CHANNELS = 'digitalChannels';
 const TIMESTAMPS_VISIBLE = 'timestampsVisible';
 const VOLTAGE_REGULATOR_MAX_CAP_PPK2 = 'voltageRegulatorMaxCap';
+const REMOTE_CAPTURE_URL = 'remoteCaptureUrl';
 
 const store = getPersistentStore<StoreSchema>({
     migrations: {
@@ -61,6 +62,7 @@ interface StoreSchema {
     [TIMESTAMPS_VISIBLE]: boolean;
 
     [VOLTAGE_REGULATOR_MAX_CAP_PPK2]: number;
+    [REMOTE_CAPTURE_URL]: string;
 
     [maxSampleFrequency: SAMPLE_FREQUENCY]: number;
     [maxSampleFrequency: DURATION_SECONDS]: number;

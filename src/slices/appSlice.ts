@@ -29,6 +29,11 @@ interface AppState {
     diskFullLimitMb?: number;
     sessionFolder?: string;
     savePending: boolean;
+    // Remote capture related state
+    remoteUrl: string;
+    isRemoteConnected: boolean;
+    isRemoteConnecting: boolean;
+    remoteConnectionError?: string;
 }
 
 const initialState = (): AppState => ({
@@ -40,7 +45,11 @@ const initialState = (): AppState => ({
     samplingRunning: false,
     isSaveChoiceDialogVisible: false,
     isExportDialogVisible: false,
-    savePending: false,
+    savePending: false, // Remote capture initial state
+    remoteUrl: 'wss://echo.websocket.org',
+    isRemoteConnected: false,
+    isRemoteConnecting: false,
+    remoteConnectionError: undefined,
 });
 
 const appSlice = createSlice({
@@ -103,6 +112,31 @@ const appSlice = createSlice({
         setSavePending: (state, action: PayloadAction<boolean>) => {
             state.savePending = action.payload;
         },
+        // Remote capture actions
+        setRemoteUrl: (state, action: PayloadAction<string>) => {
+            state.remoteUrl = action.payload;
+        },
+        setRemoteConnecting: (state, action: PayloadAction<boolean>) => {
+            state.isRemoteConnecting = action.payload;
+            if (action.payload) {
+                state.remoteConnectionError = undefined;
+            }
+        },
+        setRemoteConnected: (state, action: PayloadAction<boolean>) => {
+            state.isRemoteConnected = action.payload;
+            state.isRemoteConnecting = false;
+            if (action.payload) {
+                state.remoteConnectionError = undefined;
+            }
+        },
+        setRemoteConnectionError: (
+            state,
+            action: PayloadAction<string | undefined>
+        ) => {
+            state.remoteConnectionError = action.payload;
+            state.isRemoteConnecting = false;
+            state.isRemoteConnected = false;
+        },
     },
 });
 
@@ -120,6 +154,15 @@ export const getFileLoaded = (state: RootState) => state.app.app.fileLoadedName;
 export const isFileLoaded = (state: RootState) =>
     !!state.app.app.fileLoadedName;
 
+// Remote capture selectors
+export const getRemoteUrl = (state: RootState) => state.app.app.remoteUrl;
+export const isRemoteConnected = (state: RootState) =>
+    state.app.app.isRemoteConnected;
+export const isRemoteConnecting = (state: RootState) =>
+    state.app.app.isRemoteConnecting;
+export const getRemoteConnectionError = (state: RootState) =>
+    state.app.app.remoteConnectionError;
+
 export const {
     deviceOpenedAction,
     deviceClosedAction,
@@ -135,6 +178,11 @@ export const {
     setDiskFullTrigger,
     setSavePending,
     clearFileLoadedAction,
+    // Remote capture actions
+    setRemoteUrl,
+    setRemoteConnecting,
+    setRemoteConnected,
+    setRemoteConnectionError,
 } = appSlice.actions;
 
 export default appSlice.reducer;
